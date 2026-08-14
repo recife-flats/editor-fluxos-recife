@@ -1,38 +1,42 @@
-# Fluxo 00 — Início (verificação + roteamento por setor)
+# Fluxo 00 — Início (versão completa com pendências por apartamento)
 
-> Diferença central para o Umbler: antes de qualquer menu, o n8n consulta o
-> Supabase pelo telefone e roteia para o **setor certo** conforme onde o
-> hóspede está na linha do tempo.
+## Lógica
+Mensagem recebida → verifica no Supabase pelo telefone:
 
-## A lógica
+**Hóspede conhecido:**
+- Saudação por horário (Recife): bom dia (7-12h), boa tarde (12-18h),
+  boa noite (18-24h), + versões de almoço e pós-expediente.
+- Tem pendências? Se sim, cobra conforme o apartamento; se não, menu hóspede.
 
-```
-Mensagem chega (webhook conversation_created)
-  │
-  └─▶ VERIFICA TELEFONE no Supabase
-        │
-        ├── ACHOU → roteia por etapa da reserva:
-        │      • caução pago + em estadia → 🟢 Hóspedes Ativos → Menu Hóspede
-        │      • reservou, caução pendente → 🔵 Vendas → Menu Caução Pendente
-        │      • já fez checkout          → 🟣 Pós-Checkout → Menu Pós
-        │
-        └── NÃO ACHOU → "Você já tem reserva conosco?"
-               ├── NÃO → é LEAD → 🔵 Vendas → Menu Comercial (etiqueta lead-novo)
-               └── SIM → pede número da reserva → busca no banco
-                     ├── ACHOU → vincula telefone novo → roteia por etapa
-                     └── NÃO ACHOU → reserva não cadastrada → atendente humano
-```
+**Lead (não encontrado):**
+- Saudação por horário → "Já tem reserva conosco?"
+  - Sim → digite o número → busca no banco → achou: "Encontrei sua reserva,
+    {nome}!" (vai pra checagem de pendências); não achou → notifica atendente.
+  - Não → conectando a colaborador → menu comercial (Reservas, Ver apês,
+    Dúvidas, Já sou hóspede, Outro assunto).
 
-## Por que roteia por setor (e não menu fixo)
+## Pendências por apartamento (confirmado por Vanessa)
 
-Os 4 setores são a linha do tempo do hóspede. O mesmo "oi" recebe resposta
-diferente conforme a etapa: um lead ouve preços; um hóspede em estadia ouve
-"precisa de WiFi?"; quem fez checkout ouve sobre devolução de caução. É isso
-que o Umbler não fazia — lá todo mundo entrava no mesmo menu.
+| Item                    | 105 | 203 | 804 | 1006 |
+|-------------------------|-----|-----|-----|------|
+| FNRH (obrigatório)      |  ✅  |  ✅  |  ✅  |  ✅   |
+| Caução 100% reembolsável|  ✅  |  ✅  |  ❌  |  ✅   |
+| Documentação hóspedes   |  ✅  |  ✅  |  ✅  |  ✅   |
+| Dados do veículo        |  —  |  —  |  ✅  |  ✅*  |
 
-## Pendências (só você resolve)
+- 804: sem caução, mas sempre pede dados do veículo (garagem compacta) +
+  info da garagem enviada + formulário para a direção.
+- 1006*: dados do veículo só se for usar o estacionamento.
 
-- Textos das saudações por horário — onde encaixam no fluxo novo?
-- Nome exato das colunas: número da reserva, e phone_normalized em users.
-- Valores de payment_status ('pago'? 'paid'?).
-- Aceite de política de privacidade — integrar ao primeiro contato do lead.
+## Mensagem de cobrança de pendências
+"Para confirmar sua reserva, ainda precisamos que você finalize o preenchimento
+da FNRH, o envio da documentação dos hóspedes que terão acesso ao apartamento
+[+ caução reembolsável, se 105/203/1006] [+ dados do veículo, se 804/1006]."
+
+## Horário (do print do Umbler + textos da Vanessa)
+- Bom dia / Boa tarde / Boa noite (normais)
+- Almoço: "Nossa equipe está em horário de almoço. Assim que possível um
+  colaborador vai te atender. Enquanto isso, posso ajudar? Qual seu nome?"
+- Pós-expediente: "Nossa equipe já encerrou o atendimento de hoje. Sua mensagem
+  foi registrada e amanhã pela manhã um colaborador responde. Se for urgente,
+  digite Urgente."

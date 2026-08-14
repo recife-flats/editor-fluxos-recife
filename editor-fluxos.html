@@ -456,49 +456,75 @@
   // ====================================================================
   const FLUXOS_DEF = {
     '00-inicio': [
-      { id:'verifica', tipo:'supabase', col:0, lin:1,
-        dados:{ titulo:'Verifica telefone', texto:'Consulta bookings pelo telefone normalizado. Decide hóspede x lead e o setor.' },
-        liga:['roteia','pergunta'] },
+      { id:'gatilho', tipo:'gatilho', col:0, lin:2,
+        dados:{ titulo:'Mensagem recebida', texto:'Webhook Chatwoot: qualquer mensagem do contato inicia o fluxo.' },
+        liga:['verifica'] },
 
-      { id:'roteia', tipo:'condicao', col:1, lin:0,
-        dados:{ titulo:'Roteia por etapa', texto:'Hóspede existe — decide o setor pela etapa da reserva:',
-                opcoes:['Caução pago + em estadia → Ativos','Reservou, caução pendente → Vendas','Já fez check-out → Pós'] },
-        liga:['menu_hospede','menu_pendente'] },
+      { id:'verifica', tipo:'supabase', col:1, lin:2,
+        dados:{ titulo:'Verifica no Supabase', texto:'Consulta pelo telefone normalizado se o contato já é hóspede.' },
+        liga:['saudacao','saudacao_lead'] },
 
-      { id:'pergunta', tipo:'escolher', col:1, lin:2,
-        dados:{ titulo:'Tem reserva?', texto:'Você já tem uma reserva conosco?',
-                opcoes:['Sim, já reservei','Não, quero saber mais'] },
-        liga:['pede_num','menu_comercial'] },
+      { id:'saudacao', tipo:'horario', col:2, lin:0,
+        dados:{ titulo:'Saudação hóspede (por horário)', texto:'Olá {nome}, bem-vindo(a) de volta! Ajusta a saudação pelo horário de Recife:',
+                opcoes:['Bom dia (7-12h)','Boa tarde (12-18h)','Boa noite (18-24h)','Almoço (fora)','Pós-expediente (fora)'] },
+        liga:['checa_pendencias'] },
 
-      { id:'pede_num', tipo:'digitar', col:2, lin:3,
-        dados:{ titulo:'Pede nº da reserva', texto:'Por favor, digite o número da sua reserva.' },
-        liga:['busca_num'] },
+      { id:'checa_pendencias', tipo:'condicao', col:3, lin:0,
+        dados:{ titulo:'Tem pendências?', texto:'A reserva tem caução, FNRH, documentação ou veículo pendentes?',
+                opcoes:['Sim → cobra pendências','Não → menu hóspede'] },
+        liga:['cobra_pendencias','menu_hospede'] },
 
-      { id:'busca_num', tipo:'supabase', col:3, lin:3,
-        dados:{ titulo:'Busca pelo número', texto:'Procura a reserva pelo número informado.' },
-        liga:['vincula','nao_cadastrada'] },
+      { id:'cobra_pendencias', tipo:'condicao', col:4, lin:0,
+        dados:{ titulo:'Pendências por apartamento', texto:'Para confirmar sua reserva, ainda precisamos que você finalize. O que pede depende do apê:',
+                opcoes:['FNRH (todos)','Docs hóspedes (todos)','Caução reembolsável (105/203/1006)','Dados do veículo (804 sempre / 1006 se usar garagem)'] },
+        liga:['aciona_checkin','aciona_caucao'] },
 
-      { id:'vincula', tipo:'supabase', col:4, lin:2,
-        dados:{ titulo:'Vincula telefone', texto:'Reserva existe com outro número — vincula o telefone atual e segue como hóspede.' },
-        liga:['menu_hospede'] },
-
-      { id:'nao_cadastrada', tipo:'acionar', col:4, lin:4,
-        dados:{ titulo:'Reserva não cadastrada', texto:'Número não existe no banco. Notifica atendente.', destino:'Suporte & Manutenção' },
+      { id:'aciona_checkin', tipo:'acionar', col:5, lin:0,
+        dados:{ titulo:'FNRH + documentação', texto:'Encaminha para preencher FNRH e enviar docs dos hóspedes (e veículo, se 804/1006).', destino:'Check-in / Check-out' },
         liga:[] },
 
-      { id:'menu_hospede', tipo:'escolher', col:2, lin:0,
-        dados:{ titulo:'Menu hóspede', texto:'Oi {nome}! Que bom te ver de novo. Como posso ajudar?',
-                opcoes:['WiFi / Dúvidas do apê','Check-in / Check-out','Caução','Problema / Emergência'] },
+      { id:'aciona_caucao', tipo:'acionar', col:5, lin:1.3,
+        dados:{ titulo:'Caução (105/203/1006)', texto:'Se o apê tem caução e está pendente, encaminha para o fluxo de caução.', destino:'Caução' },
         liga:[] },
 
-      { id:'menu_pendente', tipo:'escolher', col:2, lin:1.3,
-        dados:{ titulo:'Menu caução pendente', texto:'Oi {nome}! Vi sua reserva. Faltam passos pra deixar tudo pronto:',
-                opcoes:['Pagar caução','Enviar documentação','Tirar dúvida'] },
+      { id:'menu_hospede', tipo:'escolher', col:5, lin:2.4,
+        dados:{ titulo:'Menu hóspede (tudo ok)', texto:'Em que posso te ajudar?',
+                opcoes:['WiFi / Dúvidas do apê','Self Check-in','Caução','Falar com atendente'] },
         liga:[] },
 
-      { id:'menu_comercial', tipo:'escolher', col:2, lin:2.6,
-        dados:{ titulo:'Menu comercial (lead)', texto:'Reservas e preços — escolha uma opção:',
-                opcoes:['Reservas e Preços','Ver apartamentos','Falar com atendente'] },
+      { id:'saudacao_lead', tipo:'horario', col:2, lin:3.5,
+        dados:{ titulo:'Saudação lead (por horário)', texto:'Olá! {saudação}. Tudo bem? Ajusta pelo horário:',
+                opcoes:['Bom dia','Boa tarde','Boa noite','Fora do horário'] },
+        liga:['tem_reserva'] },
+
+      { id:'tem_reserva', tipo:'escolher', col:3, lin:3.5,
+        dados:{ titulo:'Já tem reserva?', texto:'Você já tem uma reserva conosco?',
+                opcoes:['1️⃣ Sim, já tenho','2️⃣ Não tenho'] },
+        liga:['conectando_1','conectando_2'] },
+
+      { id:'conectando_1', tipo:'mensagem', col:4, lin:2.8,
+        dados:{ titulo:'Conectando (tem reserva)', texto:'Estou te conectando a um de nossos colaboradores. Enquanto isso, digite o número da sua reserva 😊' },
+        liga:['busca_reserva'] },
+
+      { id:'busca_reserva', tipo:'supabase', col:5, lin:2.8,
+        dados:{ titulo:'Busca reserva', texto:'Procura no Supabase pelo número informado.' },
+        liga:['achou_reserva','nao_achou'] },
+
+      { id:'achou_reserva', tipo:'mensagem', col:6, lin:2.4,
+        dados:{ titulo:'Encontrou', texto:'Encontrei sua reserva, {nome}! 😊 Em que posso te ajudar?' },
+        liga:['checa_pendencias'] },
+
+      { id:'nao_achou', tipo:'acionar', col:6, lin:3.4,
+        dados:{ titulo:'Não encontrou', texto:'Número não localizado. Notifica atendente para verificar (pode não estar cadastrada ainda).', destino:'Suporte & Manutenção' },
+        liga:[] },
+
+      { id:'conectando_2', tipo:'mensagem', col:4, lin:4.4,
+        dados:{ titulo:'Conectando (sem reserva)', texto:'Estou te conectando a um de nossos colaboradores. Em que posso te ajudar? 😊' },
+        liga:['menu_comercial'] },
+
+      { id:'menu_comercial', tipo:'escolher', col:5, lin:4.4,
+        dados:{ titulo:'Menu comercial (lead)', texto:'Como podemos te ajudar hoje?',
+                opcoes:['1️⃣ Reservas','2️⃣ Ver apartamentos','3️⃣ Dúvidas sobre acomodações','4️⃣ Já sou hóspede (suporte)','5️⃣ Outro assunto'] },
         liga:[] },
     ],
 
