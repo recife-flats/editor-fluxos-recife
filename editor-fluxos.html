@@ -440,6 +440,7 @@
     { id: '04-checkin-checkout',  nome: 'Check-in / Check-out',setor: 'ativos' },
     { id: '05-suporte',           nome: 'Suporte & Manutenção',setor: 'manut' },
     { id: '06-pos-checkout',      nome: 'Pós-Checkout',        setor: 'pos' },
+    { id: '07-selfcheckin-105',   nome: 'Self-Checkin · 105',  setor: 'ativos' },
   ];
 
   const CLASSE_PONTO = {
@@ -766,6 +767,72 @@
 
       { id:'agenda_crm', tipo:'supabase', col:5, lin:1,
         dados:{ titulo:'Agenda reengajamento (CRM)', texto:'Marca data de próximo contato para reengajamento. Conversa vai para Resolvida.' },
+        liga:[] },
+    ],
+
+    '07-selfcheckin-105': [
+      { id:'gatilho', tipo:'gatilho', col:0, lin:1.5,
+        dados:{ titulo:'Início Self-Checkin', texto:'Manual ou por canal. OTIMIZAÇÃO: consultar reserva no banco pelo telefone para já saber quem é (pular perguntas).' },
+        liga:['menu_inicio'] },
+
+      { id:'menu_inicio', tipo:'escolher', col:1, lin:1.5,
+        dados:{ titulo:'Menu inicial', texto:'Para acessar o apartamento e receber os dados:',
+                opcoes:['Iniciar Self Check-in','Ver Localização'] },
+        liga:['boas_vindas','localizacao'] },
+
+      { id:'boas_vindas', tipo:'mensagem', col:2, lin:0.5,
+        dados:{ titulo:'Boas-vindas', texto:'✅ *Self Check-in 105* — Bem-vindo(a)! 🎉' },
+        liga:['acesso_predio'] },
+
+      { id:'localizacao', tipo:'mensagem', col:2, lin:2.5,
+        dados:{ titulo:'Localização', texto:'📍 Procure por "Delikata" no GPS ou Google Maps. 🏢 Edifício Ipê · Av. Engenheiro. Link: maps.app.goo.gl/... 🗺️' },
+        liga:['acesso_predio'] },
+
+      { id:'acesso_predio', tipo:'mensagem', col:3, lin:1.5,
+        dados:{ titulo:'Acesso ao prédio', texto:'🔐 *Acesso ao prédio*: Ao chegar no Edifício Ipê, você encontrará um cadeado cofre próximo à caixa de correios. [foto] Senha do cofre: {senha_cofre}' },
+        liga:['confirma_dentro'] },
+
+      { id:'confirma_dentro', tipo:'escolher', col:4, lin:1.5,
+        dados:{ titulo:'Tudo certo?', texto:'Conseguiu entrar? Escolha uma opção para continuar:',
+                opcoes:['Continuar Check-in','Estacionamento'] },
+        liga:['avisos','estacionamento'] },
+
+      { id:'avisos', tipo:'mensagem', col:5, lin:0.5,
+        dados:{ titulo:'Avisos importantes', texto:'⚠️ *ATENÇÃO*: o chuveiro elétrico e o ar-condicionado não devem ser ligados ao mesmo tempo (evita queda de energia). 🗑️ Descarte de lixo: o lixo deve ser deixado em... Sejam bem-vindos à sua casa temporária em Recife! 🏠' },
+        liga:['menu_opcoes'] },
+
+      { id:'menu_opcoes', tipo:'escolher', col:6, lin:0.5,
+        dados:{ titulo:'Menu de opções', texto:'Escolha uma opção:',
+                opcoes:['Wi-Fi','Estacionamento','Localização','Falar com atendente','Finalizar Self Check-in'] },
+        liga:['wifi','estacionamento','localizacao','atendente','finaliza'] },
+
+      { id:'wifi', tipo:'mensagem', col:7, lin:0,
+        dados:{ titulo:'Wi-Fi', texto:'📶 *Rede*: Hospedagem105_vivo · 🔑 *Senha*: BemVindo105. Qualquer dificuldade pra conectar, me chama! 😊' },
+        liga:['pos_wifi'] },
+
+      { id:'estacionamento', tipo:'mensagem', col:7, lin:1.5,
+        dados:{ titulo:'Estacionamento', texto:'🅿️ Informações sobre o estacionamento: é rotativo e fica ao lado da Delikata.' },
+        liga:['pos_wifi'] },
+
+      { id:'atendente', tipo:'acionar', col:7, lin:3,
+        dados:{ titulo:'Falar com atendente', texto:'Notifica Gabriela (setor Atendimento). Título: Solicitação de Atendimento.', destino:'Suporte & Manutenção' },
+        liga:[] },
+
+      { id:'pos_wifi', tipo:'mensagem', col:8, lin:0.7,
+        dados:{ titulo:'Precisa de algo?', texto:'✨ *Precisa de algo?* Estamos disponíveis 24h no WhatsApp caso precise de assistência.' },
+        liga:['volta_menu'] },
+
+      { id:'volta_menu', tipo:'condicao', col:9, lin:0.7,
+        dados:{ titulo:'Volta ao menu?', texto:'Oferece voltar ao menu ou finalizar.',
+                opcoes:['Menu Inicial','Finalizar'] },
+        liga:['menu_opcoes','finaliza'] },
+
+      { id:'finaliza', tipo:'mensagem', col:8, lin:3,
+        dados:{ titulo:'Finaliza check-in', texto:'🎉 Seu check-in foi concluído com sucesso! Se precisar de mais alguma coisa, estamos à disposição. Aproveite sua estadia! 💜' },
+        liga:['grava_checkin'] },
+
+      { id:'grava_checkin', tipo:'supabase', col:9, lin:3,
+        dados:{ titulo:'Grava check-in feito', texto:'OTIMIZAÇÃO: UPDATE bookings SET checkin_time=now(), booking_status=em_estadia WHERE reserva=... Aplica etiqueta em-estadia.' },
         liga:[] },
     ],
   };
