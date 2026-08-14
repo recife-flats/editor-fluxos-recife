@@ -206,12 +206,15 @@
     font-size: 13px;
     line-height: 1.5;
   }
+  .cab-gatilho  { background: #2E8B57; }
   .cab-mensagem { background: var(--verde); }
   .cab-escolher { background: var(--terracota); }
   .cab-digitar  { background: #4A90D9; }
   .cab-condicao { background: #E09B3D; }
+  .cab-horario  { background: #C77DBB; }
   .cab-supabase { background: #9B6FB0; }
   .cab-acionar  { background: var(--tinta); }
+  .cab-livre    { background: #6B6355; }
   .cab-fim      { background: var(--tinta-suave); }
 
   .drawflow .drawflow-node .df-input, 
@@ -396,12 +399,15 @@
       <div style="display:flex; align-items:center; gap:14px;">
         <button class="btn-acao" id="btn-desfazer" title="Desfazer (Ctrl+Z)" disabled>↶ Desfazer</button>
         <div class="paleta-nos">
+          <div class="chip-no" draggable="true" data-tipo="gatilho">+ Gatilho</div>
           <div class="chip-no" draggable="true" data-tipo="mensagem">+ Mensagem</div>
           <div class="chip-no" draggable="true" data-tipo="escolher">+ Escolher</div>
           <div class="chip-no" draggable="true" data-tipo="digitar">+ Perguntar</div>
           <div class="chip-no" draggable="true" data-tipo="condicao">+ Condição</div>
+          <div class="chip-no" draggable="true" data-tipo="horario">+ Horário</div>
           <div class="chip-no" draggable="true" data-tipo="supabase">+ Supabase</div>
           <div class="chip-no" draggable="true" data-tipo="acionar">+ Acionar fluxo</div>
+          <div class="chip-no" draggable="true" data-tipo="livre">+ Bloco livre</div>
         </div>
       </div>
     </div>
@@ -653,16 +659,128 @@
         dados:{ titulo:'Responde no Chatwoot', texto:'Envia a mensagem pela API do Chatwoot (outgoing). Volta pro loop até acabar as mensagens.' },
         liga:[] },
     ],
+
+    '04-checkin-checkout': [
+      { id:'gatilho', tipo:'condicao', col:0, lin:1,
+        dados:{ titulo:'O que dispara?', texto:'Entra por rotina de tempo (antes do check-in) ou por palavra do hóspede:',
+                opcoes:["48h antes (804/1006) → docs+placa","24h antes → confirma horário","Hóspede diz 'cheguei' → FNRH"] },
+        liga:['pede_docs','confirma_horario','dispara_fnrh'] },
+
+      { id:'pede_docs', tipo:'mensagem', col:1, lin:0,
+        dados:{ titulo:'48h: pede docs + placa', texto:'Para liberar a portaria dos apês 804/1006, preciso dos documentos e da placa do carro. Pode me enviar? 🚗' },
+        liga:['grava_docs'] },
+
+      { id:'confirma_horario', tipo:'mensagem', col:1, lin:1,
+        dados:{ titulo:'24h: confirma chegada', texto:'Oi {nome}! Seu check-in é amanhã. Que horas você pretende chegar? Check-in a partir das 15h. ⏰' },
+        liga:[] },
+
+      { id:'dispara_fnrh', tipo:'mensagem', col:1, lin:2.2,
+        dados:{ titulo:"Detecta 'cheguei' → FNRH", texto:'Que bom que chegou! 🎉 Para o check-in (obrigatório por lei), preencha a ficha: {link_fnrh}. Leva 2 minutinhos e já te mando as senhas de acesso!' },
+        liga:['aguarda_fnrh'] },
+
+      { id:'aguarda_fnrh', tipo:'condicao', col:2, lin:2.2,
+        dados:{ titulo:'FNRH preenchida?', texto:'Grava direto no Supabase (users + bookings.fnrh_ok). Espera até 2h.',
+                opcoes:['Sim → libera acesso','Não em 2h → lembrete'] },
+        liga:['libera_acesso','lembrete_fnrh'] },
+
+      { id:'grava_docs', tipo:'supabase', col:2, lin:0,
+        dados:{ titulo:'Grava docs', texto:'UPDATE bookings SET doc_ok=true. Notifica Lucas para liberar portaria.' },
+        liga:[] },
+
+      { id:'libera_acesso', tipo:'mensagem', col:3, lin:1.6,
+        dados:{ titulo:'15h: envia acesso', texto:'Tudo certo! ✅ Aqui estão as senhas e instruções: endereço {endereco}, código do portão {codigo}, WiFi {wifi}. Bem-vindo(a)! 🏠' },
+        liga:['grava_checkin'] },
+
+      { id:'lembrete_fnrh', tipo:'mensagem', col:3, lin:3,
+        dados:{ titulo:'Lembrete FNRH (2h)', texto:'Oi {nome}! Notei que a ficha ainda não foi preenchida. Assim que terminar, te libero as senhas: {link_fnrh}' },
+        liga:['aguarda_fnrh'] },
+
+      { id:'grava_checkin', tipo:'supabase', col:4, lin:1.6,
+        dados:{ titulo:'Grava check-in', texto:'UPDATE bookings SET fnrh_ok=true, checkin_time=now(), booking_status=em_estadia. Avisa Lucas.' },
+        liga:[] },
+    ],
+
+    '05-suporte': [
+      { id:'detecta', tipo:'condicao', col:0, lin:1,
+        dados:{ titulo:'Detecta problema', texto:"Palavras-chave em QUALQUER setor: vazamento, sem luz, sem água, trancado, não abre, emergência → prioridade CRÍTICA.",
+                opcoes:['É emergência','Dúvida/pedido comum'] },
+        liga:['checa_horario','ticket_comum'] },
+
+      { id:'checa_horario', tipo:'condicao', col:1, lin:0,
+        dados:{ titulo:'Dentro do horário?', texto:'Verifica se está no horário de atendimento:',
+                opcoes:['Sim → notifica Lucas','Fora → pergunta se urgente'] },
+        liga:['notifica_lucas','fora_horario'] },
+
+      { id:'fora_horario', tipo:'escolher', col:2, lin:1,
+        dados:{ titulo:'Fora do horário', texto:'Estamos fora do horário. É uma emergência (vazamento, sem luz, acesso)?',
+                opcoes:['Sim, é urgente','Pode esperar amanhã'] },
+        liga:['aciona_plantao','espera_amanha'] },
+
+      { id:'aciona_plantao', tipo:'mensagem', col:3, lin:0,
+        dados:{ titulo:'Aciona plantão', texto:'Entendido, é urgente! Estou acionando o plantão agora. Vanessa (+55 81 9660-1178) vai te atender. Aguarde um instante. 🚨' },
+        liga:['abre_ticket'] },
+
+      { id:'espera_amanha', tipo:'mensagem', col:3, lin:2,
+        dados:{ titulo:'Responde amanhã', texto:'Sem problema! Anotei aqui e nossa equipe responde amanhã cedinho. Boa noite! 🌙' },
+        liga:[] },
+
+      { id:'notifica_lucas', tipo:'mensagem', col:2, lin:0,
+        dados:{ titulo:'Notifica Lucas', texto:'Um momento! Já estou acionando nossa equipe para resolver. 🔧' },
+        liga:['abre_ticket'] },
+
+      { id:'abre_ticket', tipo:'supabase', col:4, lin:0,
+        dados:{ titulo:'Abre ticket', texto:'Registra a ocorrência (manutenção), notifica Lucas imediatamente. Aplica etiqueta emergencia/manutencao.' },
+        liga:[] },
+
+      { id:'ticket_comum', tipo:'mensagem', col:1, lin:2.4,
+        dados:{ titulo:'Pedido comum', texto:'Descreve o problema/pedido → transfere para o setor certo (Reservas/Atendente). Notifica.' },
+        liga:[] },
+    ],
+
+    '06-pos-checkout': [
+      { id:'detecta', tipo:'condicao', col:0, lin:1,
+        dados:{ titulo:'Detecta saída', texto:"Rotina no checkout, ou hóspede diz 'saí'/'fui embora'/'checkout':",
+                opcoes:['Solicita vistoria a Lucas'] },
+        liga:['vistoria'] },
+
+      { id:'vistoria', tipo:'condicao', col:1, lin:1,
+        dados:{ titulo:'Vistoria de saída', texto:'Lucas faz a vistoria. Houve dano?',
+                opcoes:['Sem dano → integral','Com dano → desconto'] },
+        liga:['devolve_integral','devolve_desconto'] },
+
+      { id:'devolve_integral', tipo:'mensagem', col:2, lin:0,
+        dados:{ titulo:'Devolução integral', texto:'Vistoria concluída, está tudo certo! ✅ Devolvo o caução de R$ {valor} via PIX em até 24h. Obrigada pela estadia! 💜' },
+        liga:['pix_devolucao'] },
+
+      { id:'devolve_desconto', tipo:'mensagem', col:2, lin:2,
+        dados:{ titulo:'Devolução com desconto', texto:'A vistoria identificou {dano}. Custo do reparo: R$ {reparo}. Devolvo R$ {liquido} (caução − reparo). Segue a foto como comprovante.' },
+        liga:['pix_devolucao'] },
+
+      { id:'pix_devolucao', tipo:'supabase', col:3, lin:1,
+        dados:{ titulo:'PIX + grava devolução', texto:"Faz o PIX no prazo de 24h. UPDATE security_deposits status='returned', returned_at, return_proof_url. Etiqueta caucao-devolvido." },
+        liga:['pede_avaliacao'] },
+
+      { id:'pede_avaliacao', tipo:'mensagem', col:4, lin:1,
+        dados:{ titulo:'Pede avaliação', texto:'Sua avaliação faz toda diferença pra gente! ⭐ Poderia deixar uma nota na plataforma? Muito obrigada e volte sempre! 🏖️' },
+        liga:['agenda_crm'] },
+
+      { id:'agenda_crm', tipo:'supabase', col:5, lin:1,
+        dados:{ titulo:'Agenda reengajamento (CRM)', texto:'Marca data de próximo contato para reengajamento. Conversa vai para Resolvida.' },
+        liga:[] },
+    ],
   };
 
   // Cabeçalho colorido por tipo de nó
   const CAB = {
+    gatilho:  { classe: 'cab-gatilho',  rotulo: 'Gatilho (o que dispara)' },
     mensagem: { classe: 'cab-mensagem', rotulo: 'Enviar mensagem' },
     escolher: { classe: 'cab-escolher', rotulo: 'Pedir para escolher' },
     digitar:  { classe: 'cab-digitar',  rotulo: 'Pedir para digitar' },
     condicao: { classe: 'cab-condicao', rotulo: 'Condição' },
+    horario:  { classe: 'cab-horario',  rotulo: 'Horário / Saudação' },
     supabase: { classe: 'cab-supabase', rotulo: 'Consultar Supabase' },
     acionar:  { classe: 'cab-acionar',  rotulo: 'Acionar outro fluxo' },
+    livre:    { classe: 'cab-livre',    rotulo: 'Bloco livre' },
     fim:      { classe: 'cab-fim',      rotulo: 'Finalizar' },
   };
 
@@ -736,13 +854,13 @@
     const c = CAB[tipo] || CAB.mensagem;
     const d = dados || {};
     let corpo = d.texto ? esc(d.texto) : 'Clique para editar…';
-    // se for menu com opções, lista elas embaixo do texto
-    if ((tipo === 'escolher' || tipo === 'condicao') && Array.isArray(d.opcoes) && d.opcoes.length) {
+    // qualquer bloco pode ter opções listadas embaixo do texto
+    if (Array.isArray(d.opcoes) && d.opcoes.length) {
       const linhas = d.opcoes.map(o => '• ' + esc(o)).join('<br>');
       corpo = (d.texto ? esc(d.texto) + '<br>' : '') + '<span style="color:var(--tinta-suave)">' + linhas + '</span>';
     }
-    if (tipo === 'acionar' && d.destino) {
-      corpo = '→ ' + esc(d.destino);
+    if (d.destino) {
+      corpo = (d.texto ? esc(d.texto) + '<br>' : '') + '→ ' + esc(d.destino);
     }
     return `<div class="no-cabeca ${c.classe}">${esc(d.titulo) || c.rotulo}</div>
             <div class="no-corpo">${corpo}</div>`;
@@ -773,8 +891,16 @@
 
   // ---- Cria um nó de um tipo em (x,y) com dados iniciais ----
   function criarNo(tipo, x, y, dadosNo) {
-    const entradas = 1;
-    const saidas = (tipo === 'escolher' || tipo === 'condicao' || tipo === 'supabase') ? 2 : 1;
+    // gatilho é o começo do fluxo: não tem entrada
+    const entradas = (tipo === 'gatilho') ? 0 : 1;
+    // saídas: blocos que ramificam começam com 2; horário com 3; demais com 1
+    let saidas = 1;
+    if (tipo === 'horario') saidas = 3;
+    else if (tipo === 'escolher' || tipo === 'condicao' || tipo === 'supabase') saidas = 2;
+    // se já vier com opções definidas, uma saída por opção (mínimo 1)
+    if (Array.isArray(dadosNo.opcoes) && dadosNo.opcoes.length > saidas) {
+      saidas = dadosNo.opcoes.length;
+    }
     return editor.addNode(
       tipo, entradas, saidas, x, y, tipo,
       dadosNo,
@@ -920,53 +1046,45 @@
     painelTipo.textContent = c.rotulo;
 
     let html = '';
-    // Título (todos os tipos)
+    // Título (todos os tipos) — você escreve o que quiser
     html += `<div class="campo">
-      <label>Título do bloco (opcional)</label>
+      <label>Título do bloco</label>
       <input type="text" id="ed-titulo" value="${esc(no.data.titulo)}" placeholder="${c.rotulo}">
     </div>`;
 
-    if (tipo === 'acionar') {
-      // seleção de fluxo de destino
-      const ops = FLUXOS.map(f => `<option value="${f.nome}" ${no.data.destino===f.nome?'selected':''}>${f.nome}</option>`).join('');
-      html += `<div class="campo">
-        <label>Aciona qual fluxo?</label>
-        <select id="ed-destino" style="width:100%;padding:9px 11px;border:1px solid var(--borda);border-radius:8px;font-family:'Work Sans';font-size:14px;background:var(--creme);">
-          ${ops}
-        </select>
-        <p class="dica-campo">Ao clicar neste bloco no fluxo real, o atendimento pula para o fluxo escolhido.</p>
-      </div>`;
-    } else if (tipo === 'supabase') {
-      html += `<div class="campo">
-        <label>Consulta / descrição</label>
-        <textarea id="ed-texto" placeholder="Ex: verifica telefone em bookings...">${esc(no.data.texto)}</textarea>
-        <p class="dica-campo">Descreva o que a consulta faz. O SQL exato entra na fase de implementação no n8n.</p>
-      </div>`;
-    } else {
-      // mensagem / escolher / digitar / condicao — todos têm um texto
-      const rotuloTexto = tipo === 'digitar' ? 'Pergunta ao hóspede'
-                        : tipo === 'condicao' ? 'Descrição da condição'
-                        : 'Mensagem';
-      html += `<div class="campo">
-        <label>${rotuloTexto}</label>
-        <textarea id="ed-texto" placeholder="Digite o texto...">${esc(no.data.texto)}</textarea>
-      </div>`;
-    }
+    // Texto — rótulo muda conforme o tipo, mas todos têm
+    const rotuloTexto = tipo === 'digitar' ? 'Pergunta ao hóspede'
+                      : tipo === 'condicao' ? 'Descrição da condição'
+                      : tipo === 'supabase' ? 'Consulta / descrição'
+                      : tipo === 'gatilho' ? 'O que dispara (ex: mensagem recebida)'
+                      : tipo === 'horario' ? 'Descrição (ex: saudação por horário)'
+                      : tipo === 'livre' ? 'Texto do bloco'
+                      : 'Mensagem';
+    html += `<div class="campo">
+      <label>${rotuloTexto}</label>
+      <textarea id="ed-texto" placeholder="Digite o texto...">${esc(no.data.texto)}</textarea>
+    </div>`;
 
-    // Opções (só para escolher e condicao)
-    if (tipo === 'escolher' || tipo === 'condicao') {
-      const opcoes = Array.isArray(no.data.opcoes) ? no.data.opcoes : [];
-      html += `<div class="campo">
-        <label>Opções do menu</label>
-        <div class="lista-opcoes" id="ed-opcoes"></div>
-        <button class="add-opcao" id="ed-add-opcao">+ Adicionar opção</button>
-        <p class="dica-campo">Cada opção vira um botão/caminho no fluxo.</p>
-      </div>`;
-      painelCorpo.innerHTML = html;
-      renderOpcoes(opcoes);
-    } else {
-      painelCorpo.innerHTML = html;
-    }
+    // Destino (acionar fluxo) — disponível em qualquer bloco, opcional
+    const opsFluxo = FLUXOS.map(f => `<option value="${f.nome}" ${no.data.destino===f.nome?'selected':''}>${f.nome}</option>`).join('');
+    html += `<div class="campo">
+      <label>Aciona outro fluxo? (opcional)</label>
+      <select id="ed-destino" style="width:100%;padding:9px 11px;border:1px solid var(--borda);border-radius:8px;font-family:'Work Sans';font-size:14px;background:var(--creme);">
+        <option value="">— nenhum —</option>
+        ${opsFluxo}
+      </select>
+    </div>`;
+
+    // Opções — TODO bloco pode ter (menu, saudação por horário, condição...)
+    html += `<div class="campo">
+      <label>Opções / saídas (opcional)</label>
+      <div class="lista-opcoes" id="ed-opcoes"></div>
+      <button class="add-opcao" id="ed-add-opcao">+ Adicionar opção</button>
+      <p class="dica-campo">Cada opção vira um caminho/botão. Ex: Bom dia · Boa tarde · Boa noite.</p>
+    </div>`;
+
+    painelCorpo.innerHTML = html;
+    renderOpcoes(Array.isArray(no.data.opcoes) ? no.data.opcoes : []);
 
     // liga o salvamento automático nos campos
     painelCorpo.querySelectorAll('input, textarea, select').forEach(campo => {
