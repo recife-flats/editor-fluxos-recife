@@ -1,0 +1,1116 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Editor de Fluxos · Recife Flats</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/drawflow@0.0.60/dist/drawflow.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --terracota: #C1613D;
+    --terracota-esc: #9A4B2E;
+    --verde: #3D6647;
+    --verde-esc: #2C4A34;
+    --creme: #F5EFE3;
+    --creme-esc: #E8DEC9;
+    --tinta: #2E2A24;
+    --tinta-suave: #6B6355;
+    --branco: #FFFFFF;
+    --borda: #DDD3C0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Work Sans', sans-serif;
+    background: var(--creme);
+    color: var(--tinta);
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ===== Cabeçalho ===== */
+  header {
+    background: var(--branco);
+    border-bottom: 1px solid var(--borda);
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+  header .marca {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 20px;
+    color: var(--terracota);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  header .marca span.sub {
+    font-family: 'Work Sans', sans-serif;
+    font-weight: 400;
+    font-size: 13px;
+    color: var(--tinta-suave);
+    border-left: 1px solid var(--borda);
+    padding-left: 10px;
+  }
+  header .acoes { display: flex; gap: 10px; align-items: center; }
+  .btn {
+    font-family: 'Work Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all .15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .btn-primario { background: var(--terracota); color: var(--branco); }
+  .btn-primario:hover { background: var(--terracota-esc); }
+  .btn-secundario { background: transparent; color: var(--tinta); border-color: var(--borda); }
+  .btn-secundario:hover { background: var(--creme-esc); }
+
+  /* ===== Layout principal ===== */
+  .palco { flex: 1; display: flex; min-height: 0; }
+
+  /* ===== Menu lateral (abas dos fluxos) ===== */
+  aside {
+    width: 240px;
+    background: var(--branco);
+    border-right: 1px solid var(--borda);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+  aside .titulo-secao {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--tinta-suave);
+    padding: 16px 18px 8px;
+  }
+  .lista-fluxos { list-style: none; overflow-y: auto; flex: 1; }
+  .lista-fluxos li {
+    padding: 11px 18px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--tinta);
+    border-left: 3px solid transparent;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: background .12s ease;
+  }
+  .lista-fluxos li:hover { background: var(--creme); }
+  .lista-fluxos li.ativo {
+    background: var(--creme);
+    border-left-color: var(--terracota);
+    color: var(--terracota-esc);
+  }
+  .lista-fluxos li .ponto {
+    width: 9px; height: 9px; border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .p-vendas { background: #4A90D9; }
+  .p-ativos { background: var(--verde); }
+  .p-manut  { background: #E09B3D; }
+  .p-pos    { background: #9B6FB0; }
+  .p-entrada { background: var(--tinta-suave); }
+
+  aside .rodape-aside {
+    border-top: 1px solid var(--borda);
+    padding: 14px 18px;
+  }
+  aside .rodape-aside .legenda-item {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; color: var(--tinta-suave);
+    margin-bottom: 6px;
+  }
+
+  /* ===== Área do canvas ===== */
+  .area-canvas { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .barra-fluxo {
+    background: var(--creme);
+    border-bottom: 1px solid var(--borda);
+    padding: 10px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .barra-fluxo .nome-fluxo {
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-size: 16px;
+    color: var(--tinta);
+  }
+  .barra-fluxo .paleta-nos { display: flex; gap: 8px; }
+  .chip-no {
+    font-size: 12px;
+    font-weight: 500;
+    padding: 6px 11px;
+    border-radius: 7px;
+    border: 1px solid var(--borda);
+    background: var(--branco);
+    cursor: grab;
+    user-select: none;
+    transition: all .12s ease;
+  }
+  .chip-no:hover { border-color: var(--terracota); color: var(--terracota-esc); }
+  .chip-no:active { cursor: grabbing; }
+
+  #drawflow {
+    flex: 1;
+    position: relative;
+    background: var(--creme);
+    background-image: radial-gradient(var(--borda) 1px, transparent 1px);
+    background-size: 22px 22px;
+  }
+
+  /* ===== Estilo dos nós do Drawflow ===== */
+  .drawflow .drawflow-node {
+    background: var(--branco);
+    border: 1px solid var(--borda);
+    border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(46,42,36,0.06);
+    padding: 0;
+    min-width: 200px;
+    color: var(--tinta);
+    font-family: 'Work Sans', sans-serif;
+  }
+  .drawflow .drawflow-node.selected {
+    background: var(--branco) !important;
+    border: 2px solid var(--terracota) !important;
+    box-shadow: 0 0 0 3px rgba(193,97,61,0.15) !important;
+  }
+  .drawflow .drawflow-node.selected .no-corpo { background: var(--branco); }
+  .drawflow .drawflow-node .no-cabeca {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 8px 12px;
+    border-radius: 10px 10px 0 0;
+    color: var(--branco);
+  }
+  .drawflow .drawflow-node .no-corpo {
+    padding: 10px 12px;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .cab-mensagem { background: var(--verde); }
+  .cab-escolher { background: var(--terracota); }
+  .cab-digitar  { background: #4A90D9; }
+  .cab-condicao { background: #E09B3D; }
+  .cab-supabase { background: #9B6FB0; }
+  .cab-acionar  { background: var(--tinta); }
+  .cab-fim      { background: var(--tinta-suave); }
+
+  .drawflow .drawflow-node .df-input, 
+  .drawflow .drawflow-node .df-output { background: var(--terracota); }
+  .drawflow-delete { background: var(--terracota) !important; border-color: var(--terracota-esc) !important; }
+
+  /* ===== Estado vazio ===== */
+  .estado-vazio {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    pointer-events: none;
+    color: var(--tinta-suave);
+  }
+  .estado-vazio h2 {
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-size: 22px;
+    color: var(--tinta);
+    margin-bottom: 8px;
+  }
+  .estado-vazio p { font-size: 14px; max-width: 380px; line-height: 1.6; }
+
+  /* ===== Barra de ações do nó (aparece ao selecionar) ===== */
+  .barra-acoes {
+    display: none;
+    gap: 6px;
+    align-items: center;
+    margin-left: 14px;
+    padding-left: 14px;
+    border-left: 1px solid var(--borda);
+  }
+  .barra-acoes.visivel { display: flex; }
+  .btn-acao {
+    font-size: 13px;
+    font-weight: 500;
+    padding: 6px 12px;
+    border-radius: 7px;
+    border: 1px solid var(--borda);
+    background: var(--branco);
+    color: var(--tinta);
+    cursor: pointer;
+    transition: all .12s ease;
+  }
+  .btn-acao:hover { background: var(--creme-esc); border-color: var(--terracota); }
+  .btn-acao.perigo:hover { background: #F7E4DC; border-color: var(--terracota); color: var(--terracota-esc); }
+  .btn-acao:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-acao:disabled:hover { background: var(--branco); border-color: var(--borda); color: var(--tinta); }
+
+  /* ===== Painel lateral de edição ===== */
+  .painel-edicao {
+    position: fixed;
+    top: 0; right: 0;
+    width: 340px;
+    height: 100vh;
+    background: var(--branco);
+    border-left: 1px solid var(--borda);
+    box-shadow: -4px 0 20px rgba(46,42,36,0.08);
+    transform: translateX(100%);
+    transition: transform .22s cubic-bezier(.4,0,.2,1);
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+  }
+  .painel-edicao.aberto { transform: translateX(0); }
+  .painel-cabeca {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--borda);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .painel-cabeca .tipo-no {
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-size: 17px;
+    color: var(--tinta);
+  }
+  .painel-cabeca .fechar {
+    background: none; border: none; cursor: pointer;
+    font-size: 22px; line-height: 1; color: var(--tinta-suave);
+    padding: 0 4px;
+  }
+  .painel-cabeca .fechar:hover { color: var(--terracota); }
+  .painel-corpo { padding: 20px; overflow-y: auto; flex: 1; }
+  .campo { margin-bottom: 18px; }
+  .campo label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--tinta-suave);
+    margin-bottom: 6px;
+  }
+  .campo input[type=text], .campo textarea {
+    width: 100%;
+    padding: 9px 11px;
+    border: 1px solid var(--borda);
+    border-radius: 8px;
+    font-family: 'Work Sans', sans-serif;
+    font-size: 14px;
+    color: var(--tinta);
+    background: var(--creme);
+    resize: vertical;
+  }
+  .campo input:focus, .campo textarea:focus {
+    outline: none;
+    border-color: var(--terracota);
+    background: var(--branco);
+  }
+  .campo textarea { min-height: 90px; line-height: 1.5; }
+
+  /* Editor de opções (para nós de escolher/condição) */
+  .lista-opcoes { display: flex; flex-direction: column; gap: 8px; }
+  .opcao-linha { display: flex; gap: 6px; align-items: center; }
+  .opcao-linha input { flex: 1; }
+  .opcao-linha .rem-opcao {
+    background: none; border: 1px solid var(--borda);
+    border-radius: 6px; width: 30px; height: 34px;
+    cursor: pointer; color: var(--tinta-suave); font-size: 16px;
+    flex-shrink: 0;
+  }
+  .opcao-linha .rem-opcao:hover { border-color: var(--terracota); color: var(--terracota); }
+  .add-opcao {
+    margin-top: 8px;
+    background: var(--creme);
+    border: 1px dashed var(--borda);
+    border-radius: 8px;
+    padding: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--tinta-suave);
+    cursor: pointer;
+    width: 100%;
+  }
+  .add-opcao:hover { border-color: var(--terracota); color: var(--terracota-esc); }
+  .dica-campo { font-size: 12px; color: var(--tinta-suave); margin-top: 5px; line-height: 1.4; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="marca">
+    Editor de Fluxos
+    <span class="sub">Recife Flats · WhatsApp</span>
+  </div>
+  <div class="acoes">
+    <button class="btn btn-secundario" id="btn-importar">Importar JSON</button>
+    <button class="btn btn-primario" id="btn-baixar">Baixar JSON</button>
+    <input type="file" id="arquivo-import" accept=".json" hidden>
+  </div>
+</header>
+
+<div class="palco">
+  <aside>
+    <div class="titulo-secao">Fluxos</div>
+    <ul class="lista-fluxos" id="lista-fluxos"></ul>
+    <div class="rodape-aside">
+      <div class="titulo-secao" style="padding:0 0 8px;">Setores</div>
+      <div class="legenda-item"><span class="ponto p-vendas"></span> Vendas &amp; Reservas</div>
+      <div class="legenda-item"><span class="ponto p-ativos"></span> Hóspedes Ativos</div>
+      <div class="legenda-item"><span class="ponto p-manut"></span> Manutenção</div>
+      <div class="legenda-item"><span class="ponto p-pos"></span> Pós-Checkout</div>
+    </div>
+  </aside>
+
+  <div class="area-canvas">
+    <div class="barra-fluxo">
+      <div style="display:flex; align-items:center;">
+        <div class="nome-fluxo" id="nome-fluxo">Selecione um fluxo</div>
+        <div class="barra-acoes" id="barra-acoes">
+          <button class="btn-acao" id="btn-editar">Editar</button>
+          <button class="btn-acao" id="btn-copiar">Copiar</button>
+          <button class="btn-acao perigo" id="btn-apagar">Apagar</button>
+        </div>
+      </div>
+      <div style="display:flex; align-items:center; gap:14px;">
+        <button class="btn-acao" id="btn-desfazer" title="Desfazer (Ctrl+Z)" disabled>↶ Desfazer</button>
+        <div class="paleta-nos">
+          <div class="chip-no" draggable="true" data-tipo="mensagem">+ Mensagem</div>
+          <div class="chip-no" draggable="true" data-tipo="escolher">+ Escolher</div>
+          <div class="chip-no" draggable="true" data-tipo="digitar">+ Perguntar</div>
+          <div class="chip-no" draggable="true" data-tipo="condicao">+ Condição</div>
+          <div class="chip-no" draggable="true" data-tipo="supabase">+ Supabase</div>
+          <div class="chip-no" draggable="true" data-tipo="acionar">+ Acionar fluxo</div>
+        </div>
+      </div>
+    </div>
+    <div id="drawflow">
+      <div class="estado-vazio" id="estado-vazio">
+        <h2>Nenhum fluxo aberto ainda</h2>
+        <p>Escolha um fluxo no menu à esquerda, ou arraste um bloco da paleta acima para começar a desenhar. Clique num bloco para editar. Depois é só Baixar JSON.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Painel lateral de edição do nó -->
+<div class="painel-edicao" id="painel-edicao">
+  <div class="painel-cabeca">
+    <span class="tipo-no" id="painel-tipo">Editar bloco</span>
+    <button class="fechar" id="painel-fechar" title="Fechar">×</button>
+  </div>
+  <div class="painel-corpo" id="painel-corpo"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/drawflow@0.0.60/dist/drawflow.min.js"></script>
+<script>
+  // ---- Definição dos fluxos (abas). Vazios por enquanto; a gente povoa depois. ----
+  const FLUXOS = [
+    { id: '00-inicio',            nome: 'Início',              setor: 'entrada' },
+    { id: '01-reservas',          nome: 'Reservas & Preços',   setor: 'vendas' },
+    { id: '02-caucao',            nome: 'Caução',              setor: 'vendas' },
+    { id: '03-apartamentos',      nome: 'Apartamentos & Dúvidas', setor: 'ativos' },
+    { id: '04-checkin-checkout',  nome: 'Check-in / Check-out',setor: 'ativos' },
+    { id: '05-suporte',           nome: 'Suporte & Manutenção',setor: 'manut' },
+    { id: '06-pos-checkout',      nome: 'Pós-Checkout',        setor: 'pos' },
+  ];
+
+  const CLASSE_PONTO = {
+    entrada: 'p-entrada', vendas: 'p-vendas', ativos: 'p-ativos',
+    manut: 'p-manut', pos: 'p-pos'
+  };
+
+  // ====================================================================
+  //  DEFINIÇÃO DOS FLUXOS PRÉ-DESENHADOS
+  //  Formato limpo: cada nó tem id, tipo, dados, e "liga" (para quem aponta).
+  //  coluna/linha posicionam no canvas (o editor calcula os pixels).
+  //  Para povoar um fluxo novo, basta adicionar aqui — sem mexer em pixels.
+  // ====================================================================
+  const FLUXOS_DEF = {
+    '00-inicio': [
+      { id:'verifica', tipo:'supabase', col:0, lin:1,
+        dados:{ titulo:'Verifica telefone', texto:'Consulta bookings pelo telefone normalizado. Decide hóspede x lead e o setor.' },
+        liga:['roteia','pergunta'] },
+
+      { id:'roteia', tipo:'condicao', col:1, lin:0,
+        dados:{ titulo:'Roteia por etapa', texto:'Hóspede existe — decide o setor pela etapa da reserva:',
+                opcoes:['Caução pago + em estadia → Ativos','Reservou, caução pendente → Vendas','Já fez check-out → Pós'] },
+        liga:['menu_hospede','menu_pendente'] },
+
+      { id:'pergunta', tipo:'escolher', col:1, lin:2,
+        dados:{ titulo:'Tem reserva?', texto:'Você já tem uma reserva conosco?',
+                opcoes:['Sim, já reservei','Não, quero saber mais'] },
+        liga:['pede_num','menu_comercial'] },
+
+      { id:'pede_num', tipo:'digitar', col:2, lin:3,
+        dados:{ titulo:'Pede nº da reserva', texto:'Por favor, digite o número da sua reserva.' },
+        liga:['busca_num'] },
+
+      { id:'busca_num', tipo:'supabase', col:3, lin:3,
+        dados:{ titulo:'Busca pelo número', texto:'Procura a reserva pelo número informado.' },
+        liga:['vincula','nao_cadastrada'] },
+
+      { id:'vincula', tipo:'supabase', col:4, lin:2,
+        dados:{ titulo:'Vincula telefone', texto:'Reserva existe com outro número — vincula o telefone atual e segue como hóspede.' },
+        liga:['menu_hospede'] },
+
+      { id:'nao_cadastrada', tipo:'acionar', col:4, lin:4,
+        dados:{ titulo:'Reserva não cadastrada', texto:'Número não existe no banco. Notifica atendente.', destino:'Suporte & Manutenção' },
+        liga:[] },
+
+      { id:'menu_hospede', tipo:'escolher', col:2, lin:0,
+        dados:{ titulo:'Menu hóspede', texto:'Oi {nome}! Que bom te ver de novo. Como posso ajudar?',
+                opcoes:['WiFi / Dúvidas do apê','Check-in / Check-out','Caução','Problema / Emergência'] },
+        liga:[] },
+
+      { id:'menu_pendente', tipo:'escolher', col:2, lin:1.3,
+        dados:{ titulo:'Menu caução pendente', texto:'Oi {nome}! Vi sua reserva. Faltam passos pra deixar tudo pronto:',
+                opcoes:['Pagar caução','Enviar documentação','Tirar dúvida'] },
+        liga:[] },
+
+      { id:'menu_comercial', tipo:'escolher', col:2, lin:2.6,
+        dados:{ titulo:'Menu comercial (lead)', texto:'Reservas e preços — escolha uma opção:',
+                opcoes:['Reservas e Preços','Ver apartamentos','Falar com atendente'] },
+        liga:[] },
+    ],
+
+    '02-caucao': [
+      { id:'entrada', tipo:'condicao', col:0, lin:1,
+        dados:{ titulo:'Qual apartamento?', texto:'Identifica o apê da reserva para definir o valor do caução:',
+                opcoes:['105 ou 203 → R$150','1006 → R$200','804 → sem caução (só docs)'] },
+        liga:['explica','sem_caucao'] },
+
+      { id:'explica', tipo:'mensagem', col:1, lin:0,
+        dados:{ titulo:'Explica o caução', texto:'💰 Caução reembolsável de R$ {valor}. É uma garantia da acomodação, devolvida em até 24h após o check-out se estiver tudo certo.' },
+        liga:['cria_link'] },
+
+      { id:'sem_caucao', tipo:'acionar', col:1, lin:2,
+        dados:{ titulo:'Apto 804 — sem caução', texto:'Não cobra caução. Segue para documentação/liberação.', destino:'Check-in / Check-out' },
+        liga:[] },
+
+      { id:'cria_link', tipo:'supabase', col:2, lin:0,
+        dados:{ titulo:'Cria link InfinitePay', texto:'POST api.checkout.infinitepay.io/links — handle "recifeflats", price em centavos (valor×100), order_nsu = securityDepositId, webhook_url do n8n. Retorna checkout_url.' },
+        liga:['grava_pending','envia_link'] },
+
+      { id:'grava_pending', tipo:'supabase', col:2, lin:1.4,
+        dados:{ titulo:'Grava pending', texto:"INSERT security_deposits (...status 'pending', checkout_url, infinite_reference) ON CONFLICT(booking_id) DO UPDATE. Evita duplicados." },
+        liga:[] },
+
+      { id:'envia_link', tipo:'mensagem', col:3, lin:0,
+        dados:{ titulo:'Envia link ao hóspede', texto:'Aqui está o link para pagar o caução com PIX ou cartão: {link}. Assim que o pagamento cair, confirmo automaticamente! ✅' },
+        liga:['aguarda_pagto'] },
+
+      { id:'aguarda_pagto', tipo:'condicao', col:4, lin:0,
+        dados:{ titulo:'Webhook InfinitePay', texto:'Ao pagar, InfinitePay chama o webhook. RE-VALIDA em payment_check (não confia cego). Confere success + paid.',
+                opcoes:['success & paid → confirma','não pago → responde 400'] },
+        liga:['grava_pago','lembrete'] },
+
+      { id:'grava_pago', tipo:'supabase', col:5, lin:0,
+        dados:{ titulo:'Grava caução recebido', texto:"UPDATE security_deposits SET status='received', paid_at=now(), infinite_payment_id, receipt_proof_url WHERE infinite_reference=order_nsu AND status='pending'. E bookings.comprovante_ok=true." },
+        liga:['confirma'] },
+
+      { id:'lembrete', tipo:'mensagem', col:5, lin:1.4,
+        dados:{ titulo:'Lembrete em 24h', texto:'Oi {nome}! Notei que o caução ainda não foi pago. Segue o link novamente: {link}. Qualquer dúvida, estou aqui!' },
+        liga:['aguarda_pagto'] },
+
+      { id:'confirma', tipo:'mensagem', col:6, lin:0,
+        dados:{ titulo:'Confirma ao hóspede', texto:'✅ Caução confirmado! Está tudo certo. Aplico a etiqueta caucao-pago e movo para Hóspedes Ativos.' },
+        liga:['fim_cobranca'] },
+
+      { id:'fim_cobranca', tipo:'acionar', col:7, lin:0,
+        dados:{ titulo:'Segue para check-in', texto:'Caução pago. Próxima etapa: documentação e check-in.', destino:'Check-in / Check-out' },
+        liga:[] },
+
+      { id:'devolucao', tipo:'supabase', col:2, lin:2.4,
+        dados:{ titulo:'Devolução (rotina diária)', texto:'Roda 1x/dia: busca security_deposits com status=received e return_deadline <= hoje. Para cada, dispara a devolução.' },
+        liga:['checa_dano'] },
+
+      { id:'checa_dano', tipo:'condicao', col:3, lin:2.4,
+        dados:{ titulo:'Houve dano?', texto:'A vistoria de saída registrou algum dano?',
+                opcoes:['Não → devolve integral','Sim → desconta reparo'] },
+        liga:['devolve_ok','devolve_dano'] },
+
+      { id:'devolve_ok', tipo:'mensagem', col:4, lin:1.8,
+        dados:{ titulo:'Devolve integral', texto:'Vistoria concluída! ✅ Está tudo certo. Devolução do caução: R$ {valor} via PIX para {chave}. Prazo: até 24h. Volte sempre! 🏖️' },
+        liga:['grava_devolvido'] },
+
+      { id:'devolve_dano', tipo:'mensagem', col:4, lin:3,
+        dados:{ titulo:'Devolve com desconto', texto:'A vistoria identificou um dano ({item}). Custo do reparo: R$ {reparo}. Cálculo: caução − reparo = R$ {liquido} a devolver. Segue a foto como comprovante.' },
+        liga:['grava_devolvido'] },
+
+      { id:'grava_devolvido', tipo:'supabase', col:5, lin:2.4,
+        dados:{ titulo:'Grava devolução', texto:"UPDATE security_deposits SET returned_at=now(), status='returned', return_proof_url=..., withheld_amount=..., damage_photos_urls=... Aplica etiqueta caucao-devolvido." },
+        liga:[] },
+    ],
+
+    '03-apartamentos': [
+      { id:'webhook', tipo:'supabase', col:0, lin:1,
+        dados:{ titulo:'Webhook Chatwoot', texto:'Recebe mensagem. Extrai telefone, normaliza (insere 9º dígito BR), pega texto em minúsculas.' },
+        liga:['e_wifi'] },
+
+      { id:'e_wifi', tipo:'condicao', col:1, lin:1,
+        dados:{ titulo:'É sobre WiFi?', texto:'Regex nas palavras-chave: wifi | wi-fi | senha | internet | rede',
+                opcoes:['Sim → busca hóspede','Não → outros temas'] },
+        liga:['busca_hospede','outros'] },
+
+      { id:'busca_hospede', tipo:'supabase', col:2, lin:0,
+        dados:{ titulo:'Busca hóspede ativo', texto:'Consulta v_guest_active_stay pelo phone_normalized. Descobre em qual apê está hospedado.' },
+        liga:['identificado'] },
+
+      { id:'identificado', tipo:'condicao', col:3, lin:0,
+        dados:{ titulo:'Hóspede identificado?', texto:'Achou property_id ativo para esse telefone?',
+                opcoes:['Sim → qual apê','Não → pede reserva'] },
+        liga:['qual_ape','nao_ident'] },
+
+      { id:'qual_ape', tipo:'condicao', col:4, lin:0,
+        dados:{ titulo:'Qual apartamento?', texto:'Switch pelo property_id para mandar a senha certa:',
+                opcoes:['apt-105 → rede Ipê','apt-203 → rede Ipê','apt-804 → rede Forte'] },
+        liga:['resp_ipe','resp_forte'] },
+
+      { id:'resp_ipe', tipo:'mensagem', col:5, lin:0,
+        dados:{ titulo:'Senha Ipê (105/203)', texto:'Oi {nome}! 📶 Rede: Hospedagem105_vivo · 🔑 Senha: BemVindo105. Qualquer dificuldade, me chama! 😊  [conferir: 105 e 203 têm a MESMA senha no workflow]' },
+        liga:['responde'] },
+
+      { id:'resp_forte', tipo:'mensagem', col:5, lin:1.4,
+        dados:{ titulo:'Senha Forte (804)', texto:'Oi {nome}! 📶 Rede: Rosemary · 🔑 Senha: megue6049. Qualquer dificuldade, me chama! 😊' },
+        liga:['responde'] },
+
+      { id:'responde', tipo:'supabase', col:6, lin:0,
+        dados:{ titulo:'Responde no Chatwoot', texto:'POST na API do Chatwoot com a senha do apê. message_type: outgoing.' },
+        liga:[] },
+
+      { id:'nao_ident', tipo:'acionar', col:4, lin:1.6,
+        dados:{ titulo:'Não identificado', texto:'Telefone não está em estadia ativa. Encaminha para verificação.', destino:'Início' },
+        liga:[] },
+
+      { id:'outros', tipo:'mensagem', col:2, lin:2,
+        dados:{ titulo:'Outros temas do apê', texto:'Regras da casa, pet, comodidades, check-in. (A construir — do Manual)' },
+        liga:[] },
+    ],
+
+    '01-reservas': [
+      { id:'webhook', tipo:'supabase', col:0, lin:1,
+        dados:{ titulo:'Webhook Chatwoot', texto:'Recebe mensagem. Filtra e extrai: conversation_id, account_id, telefone, nome, texto.' },
+        liga:['motor'] },
+
+      { id:'motor', tipo:'condicao', col:1, lin:1,
+        dados:{ titulo:'Motor de Estado (Cecília)', texto:'Guarda estado por conversa ($getWorkflowStaticData). Persona "Cecília": saudação por horário (fuso Recife), variações pra não soar robótico, checa horário comercial.',
+                opcoes:['Precisa consultar reserva?','Já tem dados → segue'] },
+        liga:['busca_reserva','cria_checkout'] },
+
+      { id:'busca_reserva', tipo:'supabase', col:2, lin:0,
+        dados:{ titulo:'Busca reserva (Postgres)', texto:'Consulta a reserva do hóspede no banco para personalizar a resposta.' },
+        liga:['monta_pos'] },
+
+      { id:'monta_pos', tipo:'mensagem', col:3, lin:0,
+        dados:{ titulo:'Monta resposta pós-consulta', texto:'Gera as mensagens de resposta com base no que achou da reserva.' },
+        liga:['split'] },
+
+      { id:'cria_checkout', tipo:'condicao', col:2, lin:2,
+        dados:{ titulo:'Precisa criar caução?', texto:'Se a etapa exige cobrança de caução:',
+                opcoes:['Sim → cria link','Não → responde'] },
+        liga:['cria_link','split'] },
+
+      { id:'cria_link', tipo:'supabase', col:3, lin:2,
+        dados:{ titulo:'InfinitePay - Criar link', texto:'POST /links (handle recifeflats, valor×100, order_nsu=securityDepositId). → conecta ao workflow de confirmação por webhook.' },
+        liga:['upsert'] },
+
+      { id:'upsert', tipo:'supabase', col:4, lin:2,
+        dados:{ titulo:'Upsert Security Deposit', texto:"Grava/atualiza security_deposits status 'pending' com checkout_url e infinite_reference." },
+        liga:['monta_caucao'] },
+
+      { id:'monta_caucao', tipo:'mensagem', col:5, lin:2,
+        dados:{ titulo:'Monta resposta caução', texto:'Prepara a mensagem com o link de pagamento para o hóspede.' },
+        liga:['split'] },
+
+      { id:'split', tipo:'condicao', col:4, lin:0,
+        dados:{ titulo:'Split + envio humanizado', texto:'Quebra em várias mensagens e envia uma a uma com efeito humano: Ativa "digitando" → espera → desativa → responde. Loop.',
+                opcoes:['Para cada mensagem'] },
+        liga:['responde'] },
+
+      { id:'responde', tipo:'supabase', col:5, lin:0,
+        dados:{ titulo:'Responde no Chatwoot', texto:'Envia a mensagem pela API do Chatwoot (outgoing). Volta pro loop até acabar as mensagens.' },
+        liga:[] },
+    ],
+  };
+
+  // Cabeçalho colorido por tipo de nó
+  const CAB = {
+    mensagem: { classe: 'cab-mensagem', rotulo: 'Enviar mensagem' },
+    escolher: { classe: 'cab-escolher', rotulo: 'Pedir para escolher' },
+    digitar:  { classe: 'cab-digitar',  rotulo: 'Pedir para digitar' },
+    condicao: { classe: 'cab-condicao', rotulo: 'Condição' },
+    supabase: { classe: 'cab-supabase', rotulo: 'Consultar Supabase' },
+    acionar:  { classe: 'cab-acionar',  rotulo: 'Acionar outro fluxo' },
+    fim:      { classe: 'cab-fim',      rotulo: 'Finalizar' },
+  };
+
+  // ---- Inicializa o Drawflow ----
+  const elCanvas = document.getElementById('drawflow');
+  const editor = new Drawflow(elCanvas);
+  editor.reroute = true;
+  editor.start();
+  window.editor = editor; // acessível no console para depuração
+
+  let fluxoAtual = null;
+  const dados = {}; // guarda o export de cada fluxo em memória: { '00-inicio': {...} }
+
+  // ---- Monta o menu lateral ----
+  const lista = document.getElementById('lista-fluxos');
+  FLUXOS.forEach(f => {
+    const li = document.createElement('li');
+    li.dataset.id = f.id;
+    li.innerHTML = `<span class="ponto ${CLASSE_PONTO[f.setor]}"></span> ${f.nome}`;
+    li.addEventListener('click', () => abrirFluxo(f.id));
+    lista.appendChild(li);
+  });
+
+  function abrirFluxo(id) {
+    // salva o estado do fluxo atual antes de trocar
+    if (fluxoAtual) dados[fluxoAtual] = editor.export();
+
+    fluxoAtual = id;
+    const f = FLUXOS.find(x => x.id === id);
+    document.getElementById('nome-fluxo').textContent = f.nome;
+
+    // marca aba ativa
+    document.querySelectorAll('.lista-fluxos li').forEach(li => {
+      li.classList.toggle('ativo', li.dataset.id === id);
+    });
+
+    // troca de fluxo: zera histórico e fecha painel
+    historico = [];
+    if (typeof btnDesfazer !== 'undefined') btnDesfazer.disabled = true;
+    if (typeof fecharPainel === 'function') fecharPainel();
+    if (typeof barraAcoes !== 'undefined') barraAcoes.classList.remove('visivel');
+
+    // carrega o fluxo: se já editado, usa o salvo; senão, desenha da definição
+    editor.clear();
+    if (dados[id] && dados[id].drawflow) {
+      editor.import(dados[id]);
+    } else if (FLUXOS_DEF[id]) {
+      desenharFluxo(id);
+    }
+    atualizarEstadoVazio();
+  }
+
+  function atualizarEstadoVazio() {
+    const vazio = document.getElementById('estado-vazio');
+    const temNos = document.querySelectorAll('#drawflow .drawflow-node').length > 0;
+    vazio.style.display = temNos ? 'none' : 'flex';
+  }
+  // reavalia o estado vazio sempre que um nó é criado ou removido
+  editor.on('nodeCreated', atualizarEstadoVazio);
+  editor.on('nodeRemoved', atualizarEstadoVazio);
+
+  // ---- Escapa texto para exibir com segurança no HTML ----
+  function esc(s) {
+    return String(s || '').replace(/[&<>"']/g, m => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[m]));
+  }
+
+  // ---- HTML de um nó ----
+  function htmlNo(tipo, dados) {
+    const c = CAB[tipo] || CAB.mensagem;
+    const d = dados || {};
+    let corpo = d.texto ? esc(d.texto) : 'Clique para editar…';
+    // se for menu com opções, lista elas embaixo do texto
+    if ((tipo === 'escolher' || tipo === 'condicao') && Array.isArray(d.opcoes) && d.opcoes.length) {
+      const linhas = d.opcoes.map(o => '• ' + esc(o)).join('<br>');
+      corpo = (d.texto ? esc(d.texto) + '<br>' : '') + '<span style="color:var(--tinta-suave)">' + linhas + '</span>';
+    }
+    if (tipo === 'acionar' && d.destino) {
+      corpo = '→ ' + esc(d.destino);
+    }
+    return `<div class="no-cabeca ${c.classe}">${esc(d.titulo) || c.rotulo}</div>
+            <div class="no-corpo">${corpo}</div>`;
+  }
+
+  // ---- Arrastar da paleta para o canvas ----
+  document.querySelectorAll('.chip-no').forEach(chip => {
+    chip.addEventListener('dragstart', e => {
+      e.dataTransfer.setData('tipo', chip.dataset.tipo);
+    });
+  });
+  elCanvas.addEventListener('dragover', e => e.preventDefault());
+  elCanvas.addEventListener('drop', e => {
+    e.preventDefault();
+    if (!fluxoAtual) { alert('Abra um fluxo no menu antes de adicionar blocos.'); return; }
+    const tipo = e.dataTransfer.getData('tipo');
+    if (!tipo) return;
+
+    const rect = elCanvas.getBoundingClientRect();
+    const zoom = editor.zoom;
+    const x = (e.clientX - rect.left - editor.canvas_x) / zoom;
+    const y = (e.clientY - rect.top - editor.canvas_y) / zoom;
+
+    salvarHistorico();
+    criarNo(tipo, x, y, { tipo: tipo, titulo: '', texto: '', opcoes: [] });
+    atualizarEstadoVazio();
+  });
+
+  // ---- Cria um nó de um tipo em (x,y) com dados iniciais ----
+  function criarNo(tipo, x, y, dadosNo) {
+    const entradas = 1;
+    const saidas = (tipo === 'escolher' || tipo === 'condicao' || tipo === 'supabase') ? 2 : 1;
+    return editor.addNode(
+      tipo, entradas, saidas, x, y, tipo,
+      dadosNo,
+      htmlNo(tipo, dadosNo)
+    );
+  }
+
+  // ---- Desenha um fluxo inteiro a partir da definição declarativa ----
+  function desenharFluxo(id) {
+    const def = FLUXOS_DEF[id];
+    if (!def) return false;
+    const COL_LARG = 340;  // distância horizontal entre colunas
+    const LIN_ALT = 190;   // distância vertical entre linhas
+    const MARGEM_X = 40, MARGEM_Y = 40;
+
+    // 1) cria todos os nós, guardando o id real do Drawflow por id lógico
+    const mapa = {}; // idLogico -> idDrawflow
+    def.forEach(n => {
+      const x = MARGEM_X + n.col * COL_LARG;
+      const y = MARGEM_Y + n.lin * LIN_ALT;
+      const dadosNo = Object.assign({ tipo: n.tipo }, n.dados);
+      const idReal = criarNo(n.tipo, x, y, dadosNo);
+      mapa[n.id] = idReal;
+    });
+
+    // 2) cria as conexões (saída 1 do origem -> entrada 1 do destino)
+    def.forEach(n => {
+      (n.liga || []).forEach((destinoLogico, i) => {
+        const origem = mapa[n.id];
+        const destino = mapa[destinoLogico];
+        if (origem == null || destino == null) return;
+        // se o nó tem várias saídas, distribui as ligações entre elas
+        const no = editor.getNodeFromId(origem);
+        const numSaidas = Object.keys(no.outputs).length;
+        const saida = 'output_' + Math.min(i + 1, numSaidas);
+        try { editor.addConnection(origem, destino, saida, 'input_1'); } catch(e) {}
+      });
+    });
+    return true;
+  }
+
+  // ====================================================================
+  //  SELEÇÃO DE NÓ + BARRA DE AÇÕES
+  // ====================================================================
+  let noSelecionado = null;
+  const barraAcoes = document.getElementById('barra-acoes');
+
+  editor.on('nodeSelected', id => {
+    noSelecionado = id;
+    barraAcoes.classList.add('visivel');
+  });
+  editor.on('nodeUnselected', () => {
+    noSelecionado = null;
+    barraAcoes.classList.remove('visivel');
+    fecharPainel();
+  });
+  // ao clicar no vazio do canvas, alguns eventos não disparam unselected — reforço:
+  editor.on('click', () => {
+    if (!editor.node_selected) {
+      noSelecionado = null;
+      barraAcoes.classList.remove('visivel');
+    }
+  });
+
+  // ====================================================================
+  //  HISTÓRICO (DESFAZER)
+  // ====================================================================
+  let historico = [];
+  const btnDesfazer = document.getElementById('btn-desfazer');
+
+  function salvarHistorico() {
+    if (!fluxoAtual) return;
+    historico.push(JSON.stringify(editor.export()));
+    if (historico.length > 30) historico.shift(); // guarda os últimos 30 passos
+    btnDesfazer.disabled = false;
+  }
+  function desfazer() {
+    if (historico.length === 0) return;
+    const anterior = historico.pop();
+    editor.clear();
+    editor.import(JSON.parse(anterior));
+    if (historico.length === 0) btnDesfazer.disabled = true;
+    atualizarEstadoVazio();
+    fecharPainel();
+  }
+  btnDesfazer.addEventListener('click', desfazer);
+
+  // ====================================================================
+  //  AÇÕES: APAGAR / COPIAR
+  // ====================================================================
+  document.getElementById('btn-apagar').addEventListener('click', () => {
+    if (noSelecionado === null) return;
+    salvarHistorico();
+    editor.removeNodeId('node-' + noSelecionado);
+    noSelecionado = null;
+    barraAcoes.classList.remove('visivel');
+    fecharPainel();
+    atualizarEstadoVazio();
+  });
+
+  document.getElementById('btn-copiar').addEventListener('click', () => {
+    if (noSelecionado === null) return;
+    salvarHistorico();
+    const no = editor.getNodeFromId(noSelecionado);
+    // duplica um pouco deslocado, com os mesmos dados
+    criarNo(no.data.tipo, no.pos_x + 40, no.pos_y + 40, JSON.parse(JSON.stringify(no.data)));
+    atualizarEstadoVazio();
+  });
+
+  // ====================================================================
+  //  PAINEL DE EDIÇÃO
+  // ====================================================================
+  const painel = document.getElementById('painel-edicao');
+  const painelCorpo = document.getElementById('painel-corpo');
+  const painelTipo = document.getElementById('painel-tipo');
+  let idEmEdicao = null;
+
+  document.getElementById('btn-editar').addEventListener('click', () => {
+    if (noSelecionado !== null) abrirPainel(noSelecionado);
+  });
+  // duplo-clique no nó também abre a edição
+  editor.on('nodeSelected', id => { /* já setado acima */ });
+  elCanvas.addEventListener('dblclick', e => {
+    const noEl = e.target.closest('.drawflow-node');
+    if (noEl) {
+      const id = noEl.id.replace('node-', '');
+      abrirPainel(id);
+    }
+  });
+  document.getElementById('painel-fechar').addEventListener('click', fecharPainel);
+
+  function fecharPainel() {
+    painel.classList.remove('aberto');
+    idEmEdicao = null;
+  }
+
+  function abrirPainel(id) {
+    const no = editor.getNodeFromId(id);
+    if (!no) return;
+    idEmEdicao = id;
+    const tipo = no.data.tipo || 'mensagem';
+    const c = CAB[tipo] || CAB.mensagem;
+    painelTipo.textContent = c.rotulo;
+
+    let html = '';
+    // Título (todos os tipos)
+    html += `<div class="campo">
+      <label>Título do bloco (opcional)</label>
+      <input type="text" id="ed-titulo" value="${esc(no.data.titulo)}" placeholder="${c.rotulo}">
+    </div>`;
+
+    if (tipo === 'acionar') {
+      // seleção de fluxo de destino
+      const ops = FLUXOS.map(f => `<option value="${f.nome}" ${no.data.destino===f.nome?'selected':''}>${f.nome}</option>`).join('');
+      html += `<div class="campo">
+        <label>Aciona qual fluxo?</label>
+        <select id="ed-destino" style="width:100%;padding:9px 11px;border:1px solid var(--borda);border-radius:8px;font-family:'Work Sans';font-size:14px;background:var(--creme);">
+          ${ops}
+        </select>
+        <p class="dica-campo">Ao clicar neste bloco no fluxo real, o atendimento pula para o fluxo escolhido.</p>
+      </div>`;
+    } else if (tipo === 'supabase') {
+      html += `<div class="campo">
+        <label>Consulta / descrição</label>
+        <textarea id="ed-texto" placeholder="Ex: verifica telefone em bookings...">${esc(no.data.texto)}</textarea>
+        <p class="dica-campo">Descreva o que a consulta faz. O SQL exato entra na fase de implementação no n8n.</p>
+      </div>`;
+    } else {
+      // mensagem / escolher / digitar / condicao — todos têm um texto
+      const rotuloTexto = tipo === 'digitar' ? 'Pergunta ao hóspede'
+                        : tipo === 'condicao' ? 'Descrição da condição'
+                        : 'Mensagem';
+      html += `<div class="campo">
+        <label>${rotuloTexto}</label>
+        <textarea id="ed-texto" placeholder="Digite o texto...">${esc(no.data.texto)}</textarea>
+      </div>`;
+    }
+
+    // Opções (só para escolher e condicao)
+    if (tipo === 'escolher' || tipo === 'condicao') {
+      const opcoes = Array.isArray(no.data.opcoes) ? no.data.opcoes : [];
+      html += `<div class="campo">
+        <label>Opções do menu</label>
+        <div class="lista-opcoes" id="ed-opcoes"></div>
+        <button class="add-opcao" id="ed-add-opcao">+ Adicionar opção</button>
+        <p class="dica-campo">Cada opção vira um botão/caminho no fluxo.</p>
+      </div>`;
+      painelCorpo.innerHTML = html;
+      renderOpcoes(opcoes);
+    } else {
+      painelCorpo.innerHTML = html;
+    }
+
+    // liga o salvamento automático nos campos
+    painelCorpo.querySelectorAll('input, textarea, select').forEach(campo => {
+      campo.addEventListener('input', () => salvarEdicao(id));
+      campo.addEventListener('change', () => salvarEdicao(id));
+    });
+    const addBtn = document.getElementById('ed-add-opcao');
+    if (addBtn) addBtn.addEventListener('click', () => {
+      const atuais = coletarOpcoes();
+      atuais.push('Nova opção');
+      renderOpcoes(atuais);
+      salvarEdicao(id);
+    });
+
+    painel.classList.add('aberto');
+  }
+
+  function renderOpcoes(opcoes) {
+    const cont = document.getElementById('ed-opcoes');
+    if (!cont) return;
+    cont.innerHTML = '';
+    opcoes.forEach((op, i) => {
+      const linha = document.createElement('div');
+      linha.className = 'opcao-linha';
+      linha.innerHTML = `<input type="text" value="${esc(op)}" data-i="${i}">
+                         <button class="rem-opcao" data-i="${i}" title="Remover">×</button>`;
+      cont.appendChild(linha);
+    });
+    // religar eventos das opções
+    cont.querySelectorAll('input').forEach(inp => {
+      inp.addEventListener('input', () => salvarEdicao(idEmEdicao));
+    });
+    cont.querySelectorAll('.rem-opcao').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const atuais = coletarOpcoes();
+        atuais.splice(parseInt(btn.dataset.i), 1);
+        renderOpcoes(atuais);
+        salvarEdicao(idEmEdicao);
+      });
+    });
+  }
+
+  function coletarOpcoes() {
+    const cont = document.getElementById('ed-opcoes');
+    if (!cont) return [];
+    return [...cont.querySelectorAll('input')].map(i => i.value);
+  }
+
+  function salvarEdicao(id) {
+    const no = editor.getNodeFromId(id);
+    if (!no) return;
+    const novosDados = Object.assign({}, no.data);
+    const elTitulo = document.getElementById('ed-titulo');
+    const elTexto = document.getElementById('ed-texto');
+    const elDestino = document.getElementById('ed-destino');
+    if (elTitulo) novosDados.titulo = elTitulo.value;
+    if (elTexto) novosDados.texto = elTexto.value;
+    if (elDestino) novosDados.destino = elDestino.value;
+    if (document.getElementById('ed-opcoes')) novosDados.opcoes = coletarOpcoes();
+
+    // atualiza os dados do nó
+    editor.updateNodeDataFromId(id, novosDados);
+    // redesenha o conteúdo visual do nó
+    const noEl = document.getElementById('node-' + id);
+    if (noEl) {
+      const box = noEl.querySelector('.drawflow_content_node');
+      if (box) box.innerHTML = htmlNo(novosDados.tipo, novosDados);
+    }
+  }
+
+  // salvar histórico ao mover nós (para o desfazer pegar reposicionamentos)
+  editor.on('nodeMoved', () => salvarHistorico());
+
+  // ---- Baixar JSON ----
+  document.getElementById('btn-baixar').addEventListener('click', () => {
+    if (fluxoAtual) dados[fluxoAtual] = editor.export();
+    if (!fluxoAtual) { alert('Abra um fluxo primeiro.'); return; }
+
+    const exportacao = {
+      fluxo: fluxoAtual,
+      atualizado_em: new Date().toISOString(),
+      drawflow: dados[fluxoAtual]
+    };
+    const blob = new Blob([JSON.stringify(exportacao, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fluxoAtual + '.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  // ---- Importar JSON ----
+  document.getElementById('btn-importar').addEventListener('click', () => {
+    document.getElementById('arquivo-import').click();
+  });
+  document.getElementById('arquivo-import').addEventListener('change', e => {
+    const arquivo = e.target.files[0];
+    if (!arquivo) return;
+    const leitor = new FileReader();
+    leitor.onload = ev => {
+      try {
+        const json = JSON.parse(ev.target.result);
+        const payload = json.drawflow ? json.drawflow : json;
+        if (!fluxoAtual) abrirFluxo(FLUXOS[0].id);
+        editor.clear();
+        editor.import(payload);
+        dados[fluxoAtual] = editor.export();
+        atualizarEstadoVazio();
+      } catch (err) {
+        alert('Não consegui ler esse arquivo JSON. Confira se é um export válido.');
+      }
+    };
+    leitor.readAsText(arquivo);
+  });
+
+  // ====================================================================
+  //  ATALHOS DE TECLADO
+  // ====================================================================
+  document.addEventListener('keydown', e => {
+    // não interferir enquanto digita no painel
+    const digitando = ['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName);
+
+    // Ctrl/Cmd + Z = desfazer
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !digitando) {
+      e.preventDefault();
+      desfazer();
+    }
+    // Delete/Backspace = apagar nó selecionado
+    if ((e.key === 'Delete' || e.key === 'Backspace') && noSelecionado !== null && !digitando) {
+      e.preventDefault();
+      document.getElementById('btn-apagar').click();
+    }
+    // Ctrl/Cmd + D = duplicar
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd' && noSelecionado !== null && !digitando) {
+      e.preventDefault();
+      document.getElementById('btn-copiar').click();
+    }
+    // Esc = fechar painel
+    if (e.key === 'Escape') fecharPainel();
+  });
+
+  // Abre o primeiro fluxo ao carregar
+  abrirFluxo('00-inicio');
+</script>
+</body>
+</html>

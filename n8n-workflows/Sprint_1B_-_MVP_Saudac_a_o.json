@@ -1,0 +1,536 @@
+{
+  "name": "Sprint 1B - MVP Saudação",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chatwoot-mvp",
+        "options": {}
+      },
+      "id": "dd7b2354-d80e-4e94-9bd6-b0f29ece208d",
+      "name": "Webhook Chatwoot",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [
+        -192,
+        32
+      ],
+      "webhookId": "chatwoot-mvp"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst body = item.body;\n\n// Ignora eventos que não sejam mensagens recebidas do cliente (evita loop com as próprias respostas do bot)\nif (body.message_type !== undefined && body.message_type !== 'incoming') {\n  return [];\n}\nif (body.private === true) {\n  return [];\n}\n\nconst senderName = (body.sender && body.sender.name) ? body.sender.name : '';\n\nconst dados = {\n  phone_raw: body.sender ? body.sender.phone_number : null,\n  message: body.content,\n  conversation_id: body.conversation.id,\n  account_id: body.account.id,\n  sender_name: senderName,\n  first_name: senderName ? senderName.split(' ')[0] : null\n};\n\nreturn [{ json: dados }];"
+      },
+      "id": "1623ab94-6190-4bda-8b40-d40734770769",
+      "name": "Filtra e extrai",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        32,
+        32
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\n\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.estadosConversa) staticData.estadosConversa = {};\nif (!staticData.dadosColeta) staticData.dadosColeta = {};\n\nconst estadoAtual = staticData.estadosConversa[input.conversation_id];\nconst mensagemOriginal = input.message || '';\nconst mensagem = mensagemOriginal\n  .toLowerCase()\n  .normalize('NFD')\n  .replace(/[̀-ͯ]/g, '')\n  .trim();\n\nif (!staticData.dadosColeta[input.conversation_id]) staticData.dadosColeta[input.conversation_id] = {};\nconst dados = staticData.dadosColeta[input.conversation_id];\n\n// Persona Cecília — variação de saudação (evita soar repetitivo/robótico)\nconst SAUDACOES_EXTRAS = [\n  '! Tudo bem?',\n  '! Como você tá?',\n  '! Espero que esteja tudo ótimo',\n  '! Que bom falar com você',\n  '! Tudo certo?'\n];\nfunction escolherAleatorio(lista) {\n  return lista[Math.floor(Math.random() * lista.length)];\n}\n\nfunction gerarId() {\n  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {\n    const r = Math.random() * 16 | 0;\n    const v = c === 'x' ? r : (r & 0x3 | 0x8);\n    return v.toString(16);\n  });\n}\n\nfunction saudacaoPorHorario() {\n  const agora = new Date();\n  const horaRecife = new Date(agora.toLocaleString('en-US', { timeZone: 'America/Recife' }));\n  const hora = horaRecife.getHours();\n  if (hora >= 5 && hora < 12) return { texto: 'Bom dia', emoji: '☀️' };\n  if (hora >= 12 && hora < 18) return { texto: 'Boa tarde', emoji: '🌤️' };\n  return { texto: 'Boa noite', emoji: '🌙' };\n}\n\nfunction dentroDoHorarioComercial() {\n  const agora = new Date();\n  const horaRecife = new Date(agora.toLocaleString('en-US', { timeZone: 'America/Recife' }));\n  const hora = horaRecife.getHours();\n  return hora >= 8 && hora < 20;\n}\n\nfunction pushPergunta(intro, opcoesTexto) {\n  mensagens.push({ texto: intro, espera: 3 });\n  mensagens.push({ texto: '*Digite*', espera: 2 });\n  mensagens.push({ texto: opcoesTexto, espera: 5 });\n}\n\nconst OPCOES_JA_TEM_RESERVA = '1️⃣ Sim, já tenho uma reserva\\n2️⃣ Não tenho reserva';\nconst OPCOES_MENU_SEM_RESERVA = '1️⃣ Consultar disponibilidade\\n2️⃣ Fazer nova reserva\\n3️⃣ Tirar dúvida\\n4️⃣ Falar com atendente';\nconst OPCOES_QUARTOS = '1️⃣ 1 quarto\\n2️⃣ 2 quartos';\nconst OPCOES_ESTACIONAMENTO = '1️⃣ Sim\\n2️⃣ Não';\nconst OPCOES_CAUCAO = '1️⃣ Gerar link de pagamento\\n2️⃣ Tirar dúvida\\n3️⃣ Falar com atendente\\n4️⃣ Voltar';\nconst EMOJI_NUMEROS_MOTOR = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣'];\n\nlet mensagens = [];\nlet novoEstado = estadoAtual;\nlet precisaConsultarReserva = false;\nlet codigoReserva = null;\nlet precisaCriarCheckoutCaucao = false;\nlet securityDepositId = null;\n\nif (!estadoAtual) {\n  const nome = input.first_name ? `, ${input.first_name}` : '';\n  const { texto: saudacao, emoji } = saudacaoPorHorario();\n\n  mensagens.push({ texto: 'Oi! 👋', espera: 20 });\n  mensagens.push({ texto: `${saudacao}${nome}${escolherAleatorio(SAUDACOES_EXTRAS)} ${emoji}`, espera: 20 });\n\n  if (dentroDoHorarioComercial()) {\n    pushPergunta('Você já tem reserva com a gente?', OPCOES_JA_TEM_RESERVA);\n    novoEstado = 'aguardando_confirmacao_reserva';\n  } else {\n    mensagens.push({ texto: 'Que pena, você escreveu fora do nosso horário! 🌙', espera: 5 });\n    mensagens.push({ texto: 'Nosso atendimento é das 8h às 20h — mas pode me contar o que você precisa que, assim que a equipe voltar, já vê tudinho! 🙏', espera: 5 });\n    novoEstado = 'fora_horario';\n  }\n\n} else if (estadoAtual === 'fora_horario') {\n  if (dentroDoHorarioComercial()) {\n    mensagens.push({ texto: 'Boa notícia, já voltamos! ☀️', espera: 5 });\n    pushPergunta('Você já tem reserva com a gente?', OPCOES_JA_TEM_RESERVA);\n    novoEstado = 'aguardando_confirmacao_reserva';\n  } else {\n    mensagens.push({ texto: 'Recebi sua mensagem, viu? 😊', espera: 5 });\n    mensagens.push({ texto: 'Nosso horário é das 8h às 20h — assim que abrir, a equipe já te responde, tá bom? 🙏', espera: 5 });\n    novoEstado = 'fora_horario';\n  }\n\n} else if (estadoAtual === 'aguardando_confirmacao_reserva') {\n  const confirmaNao = /\\b(2|nao)\\b/.test(mensagem);\n  const confirmaSim = !confirmaNao && /\\b(1|sim|tenho|ja)\\b/.test(mensagem);\n\n  if (confirmaSim) {\n    mensagens.push({ texto: 'Show! Já vou te conectar com a equipe, só um minutinho! 😊', espera: 30 });\n    mensagens.push({ texto: 'Me passa o número da sua reserva?', espera: 40 });\n    novoEstado = 'aguardando_numero_reserva';\n  } else if (confirmaNao) {\n    mensagens.push({ texto: 'Entendi! 😊 O que você gostaria de fazer?', espera: 5 });\n    pushPergunta('Escolhe uma dessas pra mim:', OPCOES_MENU_SEM_RESERVA);\n    novoEstado = 'aguardando_opcao_sem_reserva';\n  } else {\n    mensagens.push({ texto: 'Ih, não entendi direito 😅', espera: 5 });\n    pushPergunta('Você já tem reserva com a gente?', OPCOES_JA_TEM_RESERVA);\n    novoEstado = 'aguardando_confirmacao_reserva';\n  }\n\n} else if (estadoAtual === 'aguardando_numero_reserva') {\n  precisaConsultarReserva = true;\n  codigoReserva = mensagemOriginal\n    .trim()\n    .toUpperCase()\n    .normalize('NFD')\n    .replace(/[̀-ͯ]/g, '');\n  novoEstado = 'consultando_reserva';\n\n} else if (estadoAtual === 'aguardando_nome_reserva') {\n  mensagens.push({ texto: 'Hmm, não consegui localizar sua reserva no sistema 🤔', espera: 5 });\n  mensagens.push({ texto: 'Vou te conectar com a equipe, só um minutinho…', espera: 5 });\n  novoEstado = 'transferido_humano';\n\n} else if (estadoAtual === 'aguardando_opcao_sem_reserva') {\n  const opcao = mensagem;\n\n  if (opcao.startsWith('1')) {\n    mensagens.push({ texto: 'Perfeito! 🏖️ Temos unidades em Boa Viagem e no Pina.', espera: 5 });\n    mensagens.push({ texto: 'Pra te ajudar melhor, me conta: para quantas pessoas seria a hospedagem?', espera: 5 });\n    novoEstado = 'disp_pessoas';\n  } else if (opcao.startsWith('2')) {\n    mensagens.push({ texto: 'Legal! Vamos começar sua reserva. 🎉', espera: 5 });\n    mensagens.push({ texto: 'Qual seu nome completo?', espera: 5 });\n    novoEstado = 'reserva_nome';\n  } else if (opcao.startsWith('3')) {\n    mensagens.push({ texto: 'Pode me contar sua dúvida que já registro pra equipe te responder. 😊', espera: 5 });\n    novoEstado = 'coletando_duvida';\n  } else if (opcao.startsWith('4')) {\n    mensagens.push({ texto: 'Certo! Já vou te conectar com a equipe, só um minutinho…', espera: 5 });\n    novoEstado = 'transferido_humano';\n  } else {\n    mensagens.push({ texto: 'Ih, não entendi direito 😅', espera: 5 });\n    pushPergunta('Escolhe uma dessas pra mim:', OPCOES_MENU_SEM_RESERVA);\n    novoEstado = 'aguardando_opcao_sem_reserva';\n  }\n\n} else if (estadoAtual === 'disp_pessoas') {\n  dados.pessoas = mensagemOriginal.trim();\n  mensagens.push({ texto: 'Show! 🙂', espera: 5 });\n  mensagens.push({ texto: 'E quando você gostaria de fazer o check-in?', espera: 5 });\n  novoEstado = 'disp_checkin';\n\n} else if (estadoAtual === 'disp_checkin') {\n  dados.checkin = mensagemOriginal.trim();\n  pushPergunta('Você tem preferência por um apartamento de 1 ou 2 quartos?', OPCOES_QUARTOS);\n  novoEstado = 'disp_quartos';\n\n} else if (estadoAtual === 'disp_quartos') {\n  dados.quartos = mensagemOriginal.trim();\n  pushPergunta('Precisa de vaga de estacionamento?', OPCOES_ESTACIONAMENTO);\n  novoEstado = 'disp_estacionamento';\n\n} else if (estadoAtual === 'disp_estacionamento') {\n  dados.estacionamento = mensagemOriginal.trim();\n  const resumo = `📋 Resumo (consulta de disponibilidade):\\n- Pessoas: ${dados.pessoas}\\n- Check-in desejado: ${dados.checkin}\\n- Quartos: ${dados.quartos}\\n- Estacionamento: ${dados.estacionamento}`;\n  mensagens.push({ texto: resumo, espera: 2, privado: true });\n  mensagens.push({ texto: 'Anotadinho! 📝', espera: 5 });\n  mensagens.push({ texto: 'Vou te conectar com a equipe agora, eles já têm tudo que você me contou! 😊', espera: 5 });\n  novoEstado = 'transferido_humano';\n\n} else if (estadoAtual === 'reserva_nome') {\n  dados.nome = mensagemOriginal.trim();\n  mensagens.push({ texto: 'Prazer! 😊', espera: 5 });\n  mensagens.push({ texto: 'Para quantas pessoas seria a reserva?', espera: 5 });\n  novoEstado = 'reserva_pessoas';\n\n} else if (estadoAtual === 'reserva_pessoas') {\n  dados.pessoas = mensagemOriginal.trim();\n  mensagens.push({ texto: 'Qual data você gostaria de fazer o check-in?', espera: 5 });\n  novoEstado = 'reserva_checkin';\n\n} else if (estadoAtual === 'reserva_checkin') {\n  dados.checkin = mensagemOriginal.trim();\n  mensagens.push({ texto: 'E o check-out, para quando seria?', espera: 5 });\n  novoEstado = 'reserva_checkout';\n\n} else if (estadoAtual === 'reserva_checkout') {\n  dados.checkout = mensagemOriginal.trim();\n  pushPergunta('Você tem preferência por um apartamento de 1 ou 2 quartos?', OPCOES_QUARTOS);\n  novoEstado = 'reserva_quartos';\n\n} else if (estadoAtual === 'reserva_quartos') {\n  dados.quartos = mensagemOriginal.trim();\n  pushPergunta('Precisa de vaga de estacionamento?', OPCOES_ESTACIONAMENTO);\n  novoEstado = 'reserva_estacionamento';\n\n} else if (estadoAtual === 'reserva_estacionamento') {\n  dados.estacionamento = mensagemOriginal.trim();\n  const resumo = `📋 Resumo (nova reserva):\\n- Nome: ${dados.nome}\\n- Pessoas: ${dados.pessoas}\\n- Check-in: ${dados.checkin}\\n- Check-out: ${dados.checkout}\\n- Quartos: ${dados.quartos}\\n- Estacionamento: ${dados.estacionamento}`;\n  mensagens.push({ texto: resumo, espera: 2, privado: true });\n  mensagens.push({ texto: 'Perfeito! 🎉', espera: 5 });\n  mensagens.push({ texto: 'Vou te conectar com a equipe agora, eles já têm tudo que você me contou! 😊', espera: 5 });\n  novoEstado = 'transferido_humano';\n\n} else if (estadoAtual === 'coletando_duvida') {\n  mensagens.push({ texto: 'Anotadinho! 📝', espera: 5 });\n  mensagens.push({ texto: 'Vou te conectar com a equipe agora, eles já têm tudo que você me contou! 😊', espera: 5 });\n  novoEstado = 'transferido_humano';\n\n} else if (estadoAtual === 'aguardando_escolha_pendencia') {\n  const escolhaIndex = parseInt(mensagemOriginal.trim(), 10) - 1;\n  const opcoes = dados.pendenciasAplicaveis || [];\n  const escolhida = opcoes[escolhaIndex];\n  dados.pendenciaEscolhida = escolhida ? escolhida.chave : mensagemOriginal.trim();\n\n  if (dados.pendenciaEscolhida === 'caucao') {\n    const valor = dados.caucaoValor ? Number(dados.caucaoValor).toFixed(2).replace('.', ',') : null;\n    mensagens.push({ texto: valor ? `A caução reembolsável da sua reserva é de R$ ${valor}.` : 'Sobre a caução reembolsável da sua reserva:', espera: 3 });\n    mensagens.push({ texto: 'Essa informação faz parte dos termos da sua reserva — dá pra conferir também direto na plataforma que você reservou (Booking, Airbnb etc.), na parte de políticas da propriedade.', espera: 5 });\n    mensagens.push({ texto: 'É um valor de garantia, devolvido depois do check-out se estiver tudo certo com o apartamento.', espera: 4 });\n    pushPergunta('O que você gostaria de fazer?', OPCOES_CAUCAO);\n    novoEstado = 'caucao_info';\n  } else {\n    mensagens.push({ texto: 'Já vou te conectar com a equipe, só um minutinho! 😊', espera: 5 });\n    novoEstado = 'transferido_humano';\n  }\n\n} else if (estadoAtual === 'caucao_info') {\n  const pedeVoltar = mensagem.startsWith('4') || /voltar/.test(mensagem);\n  const pedeAtendente = mensagem.startsWith('3') || /atendente|humano|colaborador|pessoa real|falar com/.test(mensagem);\n  const pedeLink = mensagem.startsWith('1') || /gerar|link|pagar|pagamento|pix/.test(mensagem);\n  const pedeDuvida = mensagem.startsWith('2') || /duvida|saber mais|explica|entend/.test(mensagem);\n  const objecao = /nao sabia|nunca vi|nao vi isso|nao tinha isso|nao esta na reserva|nao tem isso|cade isso|nao concordo|enganacao|golpe|cobranca indevida|isso e um absurdo/.test(mensagem);\n\n  if (pedeVoltar) {\n    const opcoes = dados.pendenciasAplicaveis || [];\n    if (opcoes.length > 0) {\n      mensagens.push({ texto: 'Voltando! Essas são as pendências:', espera: 3 });\n      mensagens.push({ texto: '*Digite*', espera: 2 });\n      const lista = opcoes.map((p, i) => `${EMOJI_NUMEROS_MOTOR[i] || (i + 1) + '.'} ${p.label}`).join('\\n');\n      mensagens.push({ texto: lista, espera: 5 });\n      novoEstado = 'aguardando_escolha_pendencia';\n    } else {\n      mensagens.push({ texto: 'Já vou te conectar com a equipe, só um minutinho! 😊', espera: 5 });\n      novoEstado = 'transferido_humano';\n    }\n  } else if (pedeAtendente) {\n    mensagens.push({ texto: 'Já vou te conectar com a equipe, só um minutinho! 😊', espera: 5 });\n    novoEstado = 'transferido_humano';\n  } else if (pedeLink) {\n    precisaCriarCheckoutCaucao = true;\n    securityDepositId = gerarId();\n    novoEstado = 'criando_checkout_caucao';\n  } else if (pedeDuvida || objecao) {\n    if (objecao) {\n      mensagens.push({ texto: 'Entendo a dúvida! Mas pode ficar tranquilo(a), não é nenhum engano 😊', espera: 3 });\n    }\n    mensagens.push({ texto: 'A caução é uma prática comum em temporada — funciona como uma garantia, e você recebe de volta depois do check-out se estiver tudo certo com o apartamento.', espera: 4 });\n    mensagens.push({ texto: 'Essa condição está nos termos da sua reserva, incluindo na plataforma onde você reservou (Booking, Airbnb etc.) — pode conferir por lá também.', espera: 4 });\n    pushPergunta('O que você gostaria de fazer?', OPCOES_CAUCAO);\n    novoEstado = 'caucao_info';\n  } else {\n    mensagens.push({ texto: 'Desculpa, não entendi 😅', espera: 3 });\n    pushPergunta('O que você gostaria de fazer?', OPCOES_CAUCAO);\n    novoEstado = 'caucao_info';\n  }\n\n} else {\n  mensagens = [];\n  novoEstado = estadoAtual;\n}\n\nstaticData.estadosConversa[input.conversation_id] = novoEstado;\n\nreturn [{\n  json: {\n    ...input,\n    ...dados,\n    mensagens,\n    precisaConsultarReserva,\n    codigoReserva,\n    precisaCriarCheckoutCaucao,\n    securityDepositId,\n    estado: novoEstado\n  }\n}];"
+      },
+      "id": "f09ba9ff-9fcf-40fb-9755-66799a9441f1",
+      "name": "Motor de Estado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        256,
+        32
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.precisaConsultarReserva }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e583cd24-7667-43aa-8fe2-3c882eca38c9",
+      "name": "Precisa consultar reserva?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        480,
+        32
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  b.id AS booking_id,\n  b.booking_code,\n  b.guest_name,\n  b.\"propertyId\",\n  b.\"checkIn\",\n  b.\"checkOut\",\n  b.fnrh_ok,\n  b.doc_ok,\n  b.form_ok,\n  b.comprovante_ok,\n  p.title AS property_title,\n  p.rules AS property_rules,\n  p.bedrooms,\n  p.neighborhood,\n  p.default_deposit_amount\nFROM bookings b\nJOIN properties p ON p.id = b.\"propertyId\"\nWHERE upper(b.booking_code) = $1\nLIMIT 1;",
+        "options": {
+          "queryReplacement": "={{ [$json.codigoReserva] }}"
+        }
+      },
+      "id": "6e30cb13-c11a-4885-987e-559a274af822",
+      "name": "Postgres - Busca Reserva",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "alwaysOutputData": true,
+      "position": [
+        480,
+        224
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "dsFHSj3fyDBYrWYF",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const resultado = $input.first().json;\nconst contexto = $('Motor de Estado').first().json;\n\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.estadosConversa) staticData.estadosConversa = {};\nif (!staticData.dadosColeta) staticData.dadosColeta = {};\nif (!staticData.dadosColeta[contexto.conversation_id]) staticData.dadosColeta[contexto.conversation_id] = {};\nconst dados = staticData.dadosColeta[contexto.conversation_id];\n\nconst EMOJI_NUMEROS = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣'];\n\nlet mensagens = [];\nlet novoEstado;\n\nconst encontrou = Boolean(resultado && resultado.booking_code);\n\nif (encontrou) {\n  const nome = resultado.guest_name || contexto.sender_name || 'hóspede';\n  const quartos = resultado.bedrooms;\n  const bairro = resultado.neighborhood;\n  const temCaucao = resultado.default_deposit_amount && Number(resultado.default_deposit_amount) > 0;\n\n  const pendenciasAplicaveis = [];\n  if (temCaucao && !resultado.comprovante_ok) {\n    pendenciasAplicaveis.push({ chave: 'caucao', label: 'Caução Reembolsável' });\n  }\n  if (!resultado.doc_ok) {\n    pendenciasAplicaveis.push({ chave: 'documentacao', label: 'Envio da documentação dos hóspedes' });\n  }\n  if (!resultado.fnrh_ok || !resultado.form_ok) {\n    pendenciasAplicaveis.push({ chave: 'fnrh', label: 'Preenchimento da ficha FNRH' });\n  }\n\n  dados.pendenciasAplicaveis = pendenciasAplicaveis;\n  dados.propertyId = resultado.propertyId;\n  dados.bookingId = resultado.booking_id;\n  dados.bookingCode = resultado.booking_code;\n  dados.caucaoValor = (resultado.booking_code || '').toUpperCase().startsWith('TESTE')\n    ? '1.00' // valor reduzido só para reservas de teste (booking_code TESTE-*), não afeta reservas reais\n    : resultado.default_deposit_amount;\n  dados.guestName = nome;\n\n  mensagens.push({ texto: 'Aguarde um minuto, enquanto localizo sua reserva 🔎', espera: 5 });\n  mensagens.push({ texto: 'Reserva Confirmada ✅', espera: 5 });\n  mensagens.push({ texto: `Encontrei sua reserva, ${nome}!`, espera: 5 });\n  mensagens.push({ texto: `Você reservou o Apartamento de ${quartos} quarto${quartos === 1 ? '' : 's'} em ${bairro}`, espera: 5 });\n  mensagens.push({ texto: 'Vou verificar se há alguma pendência, ou se posso finalizar e confirmar sua reserva.', espera: 5 });\n\n  if (pendenciasAplicaveis.length === 0) {\n    mensagens.push({ texto: 'Está tudo certo com sua documentação e cadastro! ✅ Sua reserva está confirmada.', espera: 5 });\n    novoEstado = 'atendimento_concluido';\n  } else {\n    const plural = pendenciasAplicaveis.length > 1 ? 's' : '';\n    mensagens.push({ texto: `Temos ${pendenciasAplicaveis.length} pendência${plural} em seu cadastro antes de finalizarmos.`, espera: 3 });\n    mensagens.push({ texto: 'Vou listar e você me fala por onde quer começar:', espera: 3 });\n    mensagens.push({ texto: '*Digite*', espera: 2 });\n    const lista = pendenciasAplicaveis.map((p, i) => `${EMOJI_NUMEROS[i] || (i + 1) + '.'} ${p.label}`).join('\\n');\n    mensagens.push({ texto: lista, espera: 5 });\n    novoEstado = 'aguardando_escolha_pendencia';\n  }\n} else {\n  mensagens.push({ texto: 'Não consegui localizar essa reserva no sistema.', espera: 5 });\n  mensagens.push({ texto: 'Por favor, me informe em nome de quem está a reserva', espera: 5 });\n  novoEstado = 'aguardando_nome_reserva';\n}\n\nstaticData.estadosConversa[contexto.conversation_id] = novoEstado;\n\nreturn [{\n  json: {\n    ...contexto,\n    mensagens,\n    estado: novoEstado\n  }\n}];"
+      },
+      "id": "3cb7010c-5afe-4a2f-94cc-65f5bc4ef636",
+      "name": "Monta Resposta Pós-Consulta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        704,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "mensagens",
+        "include": "allOtherFields",
+        "options": {
+          "destinationFieldName": "msg"
+        }
+      },
+      "id": "085c0183-0805-49b4-b32b-0631620df733",
+      "name": "Split Out",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        928,
+        32
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "3fff6e08-9e4d-4c29-a8f1-d7560c827a45",
+      "name": "Enviar mensagens (loop)",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1152,
+        32
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://chat.recifeflatstemporada.com/api/v1/accounts/{{ $json.account_id }}/conversations/{{ $json.conversation_id }}/toggle_typing_status",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"typing_status\": \"on\"\n}",
+        "options": {}
+      },
+      "id": "d57f37aa-398d-4237-b708-5da006654a74",
+      "name": "Ativa Digitando",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1376,
+        -80
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "VjNdxyrnCVlYmydz",
+          "name": "Chatwoot API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": "={{ $('Enviar mensagens (loop)').item.json.msg.espera }}"
+      },
+      "id": "7a5679b4-a53a-4574-a5e0-2d1ade0413af",
+      "name": "Espera (delay humano)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1600,
+        -80
+      ],
+      "webhookId": "edce3afa-197f-422c-8507-5d37b8de3add"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://chat.recifeflatstemporada.com/api/v1/accounts/{{ $('Enviar mensagens (loop)').item.json.account_id }}/conversations/{{ $('Enviar mensagens (loop)').item.json.conversation_id }}/toggle_typing_status",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"typing_status\": \"off\"\n}",
+        "options": {}
+      },
+      "id": "4eb1077b-c3fb-421c-9091-60f6e40d277e",
+      "name": "Desativa Digitando",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1824,
+        -80
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "VjNdxyrnCVlYmydz",
+          "name": "Chatwoot API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://chat.recifeflatstemporada.com/api/v1/accounts/{{ $('Enviar mensagens (loop)').item.json.account_id }}/conversations/{{ $('Enviar mensagens (loop)').item.json.conversation_id }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"content\": {{ JSON.stringify($('Enviar mensagens (loop)').item.json.msg.texto) }},\n  \"message_type\": \"outgoing\",\n  \"private\": {{ $('Enviar mensagens (loop)').item.json.msg.privado ? true : false }}\n}",
+        "options": {}
+      },
+      "id": "7a912bbd-22cf-4db6-bf43-6813d1c3bc17",
+      "name": "Responde no Chatwoot",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2048,
+        -80
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "VjNdxyrnCVlYmydz",
+          "name": "Chatwoot API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.precisaCriarCheckoutCaucao }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "3c74f3e1-528a-4f7e-a307-b2f263dff17b",
+      "name": "Precisa criar checkout caução?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        704,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.checkout.infinitepay.io/links",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"handle\": \"recifeflats\",\n  \"order_nsu\": {{ JSON.stringify($json.securityDepositId) }},\n  \"items\": [\n    {\n      \"quantity\": 1,\n      \"price\": {{ Math.round(Number($json.caucaoValor) * 100) }},\n      \"description\": {{ JSON.stringify('Caução Reembolsável - Reserva ' + ($json.bookingCode || $json.conversation_id)) }}\n    }\n  ],\n  \"webhook_url\": \"https://n8n.recifeflatstemporada.com/webhook/infinitepay-caucao\",\n  \"customer\": {\n    \"name\": {{ JSON.stringify($json.guestName || $json.sender_name || 'Hóspede') }}\n  }\n}",
+        "options": {}
+      },
+      "id": "6b4a437c-715b-4aa9-af1b-612fd47c4730",
+      "name": "InfinitePay - Criar Link",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        928,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO security_deposits (\n  id, booking_id, property_id, amount, booking_code, guest_name, guest_phone,\n  checkout_url, infinite_reference, status, metadata\n) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'pending',$10::jsonb)\nON CONFLICT (booking_id) DO UPDATE SET\n  checkout_url = EXCLUDED.checkout_url,\n  infinite_reference = EXCLUDED.infinite_reference,\n  status = 'pending',\n  amount = EXCLUDED.amount,\n  metadata = EXCLUDED.metadata,\n  \"updatedAt\" = CURRENT_TIMESTAMP,\n  updated_at = now()\nRETURNING id;",
+        "options": {
+          "queryReplacement": "={{ [\n  $('Motor de Estado').item.json.securityDepositId,\n  $('Motor de Estado').item.json.bookingId,\n  $('Motor de Estado').item.json.propertyId,\n  $('Motor de Estado').item.json.caucaoValor,\n  $('Motor de Estado').item.json.bookingCode,\n  $('Motor de Estado').item.json.guestName,\n  $('Motor de Estado').item.json.phone_raw,\n  $json.url,\n  $('Motor de Estado').item.json.securityDepositId,\n  JSON.stringify({ conversation_id: $('Motor de Estado').item.json.conversation_id, account_id: $('Motor de Estado').item.json.account_id })\n] }}"
+        }
+      },
+      "id": "e6b59a75-79d2-4518-aaf4-8d49419d5b4d",
+      "name": "Upsert Security Deposit",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1152,
+        -160
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "dsFHSj3fyDBYrWYF",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const contexto = $('Motor de Estado').first().json;\nconst linkResp = $('InfinitePay - Criar Link').first().json;\n\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.estadosConversa) staticData.estadosConversa = {};\n\nconst valor = contexto.caucaoValor ? Number(contexto.caucaoValor).toFixed(2).replace('.', ',') : null;\n\nlet mensagens = [];\nmensagens.push({ texto: 'Show! 😊', espera: 3 });\nmensagens.push({ texto: valor ? `Aqui está o link seguro pra pagar a caução (R$ ${valor}):` : 'Aqui está o link seguro pra pagar a caução:', espera: 3 });\nmensagens.push({ texto: linkResp.url, espera: 5 });\nmensagens.push({ texto: 'Assim que o pagamento cair, eu confirmo aqui automaticamente pra você ✅', espera: 4 });\nmensagens.push({ texto: 'Qualquer coisa, é só chamar a gente!', espera: 4 });\n\nconst novoEstado = 'transferido_humano';\nstaticData.estadosConversa[contexto.conversation_id] = novoEstado;\n\nreturn [{\n  json: {\n    ...contexto,\n    mensagens,\n    estado: novoEstado\n  }\n}];"
+      },
+      "id": "c98c1454-5130-481e-8ed8-665884ec6d8e",
+      "name": "Monta Resposta Checkout Caução",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1376,
+        -160
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook Chatwoot": {
+      "main": [
+        [
+          {
+            "node": "Filtra e extrai",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtra e extrai": {
+      "main": [
+        [
+          {
+            "node": "Motor de Estado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Motor de Estado": {
+      "main": [
+        [
+          {
+            "node": "Precisa consultar reserva?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Precisa consultar reserva?": {
+      "main": [
+        [
+          {
+            "node": "Postgres - Busca Reserva",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Precisa criar checkout caução?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres - Busca Reserva": {
+      "main": [
+        [
+          {
+            "node": "Monta Resposta Pós-Consulta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta Resposta Pós-Consulta": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "Enviar mensagens (loop)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar mensagens (loop)": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Ativa Digitando",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ativa Digitando": {
+      "main": [
+        [
+          {
+            "node": "Espera (delay humano)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Espera (delay humano)": {
+      "main": [
+        [
+          {
+            "node": "Desativa Digitando",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Desativa Digitando": {
+      "main": [
+        [
+          {
+            "node": "Responde no Chatwoot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responde no Chatwoot": {
+      "main": [
+        [
+          {
+            "node": "Enviar mensagens (loop)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Precisa criar checkout caução?": {
+      "main": [
+        [
+          {
+            "node": "InfinitePay - Criar Link",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "InfinitePay - Criar Link": {
+      "main": [
+        [
+          {
+            "node": "Upsert Security Deposit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Security Deposit": {
+      "main": [
+        [
+          {
+            "node": "Monta Resposta Checkout Caução",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta Resposta Checkout Caução": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "4dead77f-a15b-4b7d-8b59-330f15863a7d",
+  "meta": {
+    "instanceId": "b186e5a7fb855e4c4d3aca1fca66450666782f763be08421abd19d8464351fdc"
+  },
+  "nodeGroups": [],
+  "id": "nmza2HLOUF5LfoKr",
+  "tags": []
+}

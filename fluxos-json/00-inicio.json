@@ -1,0 +1,128 @@
+{
+  "fluxo": "00-inicio",
+  "titulo": "Autoatendimento - Início com verificação e roteamento por setor",
+  "origem": "Umbler (captura) + Manual de Operação + doc Implementação + case GitHub",
+  "gatilhos": [
+    { "tipo": "conversation_created", "descricao": "Webhook do Chatwoot ao abrir conversa" }
+  ],
+  "nos": [
+    {
+      "id": "verificacao_banco",
+      "tipo": "verificar_supabase",
+      "descricao": "Consulta telefone normalizado. Define hóspede vs lead e o SETOR.",
+      "consulta": "SELECT b.*, u.phone FROM bookings b JOIN users u ON u.id = b.\"userId\" WHERE u.phone_normalized = :telefone",
+      "saidas": {
+        "encontrado": "roteia_por_etapa",
+        "nao_encontrado": "pergunta_tem_reserva"
+      }
+    },
+    {
+      "id": "roteia_por_etapa",
+      "tipo": "definir_condicao",
+      "descricao": "Hóspede existe. Decide o setor pela etapa da reserva (linha do tempo).",
+      "regras": [
+        { "se": "payment_status = pago E ainda nao fez checkout", "setor": "Hospedes Ativos", "vai_para": "menu_hospede" },
+        { "se": "reservou mas caução pendente", "setor": "Vendas & Reservas", "vai_para": "menu_caucao_pendente" },
+        { "se": "ja fez checkout", "setor": "Pos-Checkout", "vai_para": "menu_pos_checkout" }
+      ]
+    },
+    {
+      "id": "pergunta_tem_reserva",
+      "tipo": "pedir_escolher",
+      "descricao": "Telefone não encontrado. Pode ser lead ou hóspede com outro número.",
+      "mensagem": "Você já tem uma reserva conosco?",
+      "opcoes": [
+        { "label": "Sim, já reservei", "vai_para": "pede_num_reserva" },
+        { "label": "Não, quero saber mais", "setor": "Vendas & Reservas", "vai_para": "menu_comercial" }
+      ]
+    },
+    {
+      "id": "pede_num_reserva",
+      "tipo": "pedir_digitar",
+      "mensagem": "Por favor, digite o número da sua reserva.",
+      "salva_em": "NumerodaReserva",
+      "validacao": "10 dígitos (Booking) — confirmar regex por plataforma",
+      "proximo": "busca_reserva_por_numero"
+    },
+    {
+      "id": "busca_reserva_por_numero",
+      "tipo": "verificar_supabase",
+      "consulta": "SELECT * FROM bookings WHERE numero_reserva = :NumerodaReserva",
+      "saidas": {
+        "encontrado": "vincula_telefone",
+        "nao_encontrado": "reserva_nao_cadastrada"
+      }
+    },
+    {
+      "id": "vincula_telefone",
+      "tipo": "atualizar_supabase",
+      "descricao": "Reserva existe com outro telefone. Vincula o número atual.",
+      "acao": "UPDATE users SET phone_normalized = :telefone_atual WHERE id = (SELECT \"userId\" FROM bookings WHERE numero_reserva = :NumerodaReserva)",
+      "proximo": "roteia_por_etapa"
+    },
+    {
+      "id": "reserva_nao_cadastrada",
+      "tipo": "notificar_atendente",
+      "descricao": "Número informado não existe (funcionário ainda não cadastrou).",
+      "titulo": "Reserva não encontrada - verificar cadastro",
+      "atendente": "Vanessa Rafaella",
+      "setor": "Vendas & Reservas",
+      "proximo": "fim"
+    },
+    {
+      "id": "menu_hospede",
+      "tipo": "pedir_escolher",
+      "setor": "Hospedes Ativos",
+      "mensagem": "Oi {guest_name}! Que bom te ver de novo. Como posso ajudar?",
+      "opcoes": [
+        { "label": "WiFi / Dúvidas do apê", "aciona_fluxo": "03-apartamentos" },
+        { "label": "Check-in / Check-out", "aciona_fluxo": "04-checkin-checkout" },
+        { "label": "Caução", "aciona_fluxo": "02-caucao" },
+        { "label": "Problema / Emergência", "aciona_fluxo": "05-suporte" }
+      ]
+    },
+    {
+      "id": "menu_caucao_pendente",
+      "tipo": "pedir_escolher",
+      "setor": "Vendas & Reservas",
+      "descricao": "Hóspede reservou mas ainda não pagou caução. Empurra pro fluxo 02.",
+      "mensagem": "Oi {guest_name}! Vi sua reserva do Apto {apto}. Faltam alguns passos pra deixar tudo pronto:",
+      "opcoes": [
+        { "label": "Pagar caução", "aciona_fluxo": "02-caucao" },
+        { "label": "Enviar documentação", "aciona_fluxo": "04-checkin-checkout" },
+        { "label": "Tirar dúvida", "aciona_fluxo": "03-apartamentos" }
+      ]
+    },
+    {
+      "id": "menu_comercial",
+      "tipo": "pedir_escolher",
+      "setor": "Vendas & Reservas",
+      "descricao": "LEAD sem reserva. Foco comercial. Aplica etiqueta lead-novo.",
+      "aplica_etiqueta": "lead-novo",
+      "mensagem": "*Reservas e preços* — Escolha uma opção:",
+      "opcoes": [
+        { "label": "Reservas e Preços", "aciona_fluxo": "01-reservas" },
+        { "label": "Ver apartamentos", "aciona_fluxo": "03-apartamentos" },
+        { "label": "Falar com atendente", "aciona_fluxo": "05-suporte" }
+      ]
+    },
+    {
+      "id": "menu_pos_checkout",
+      "tipo": "pedir_escolher",
+      "setor": "Pos-Checkout",
+      "mensagem": "Oi {guest_name}! Esperamos que tenha gostado da estadia.",
+      "opcoes": [
+        { "label": "Devolução do caução", "aciona_fluxo": "02-caucao" },
+        { "label": "Deixar avaliação", "aciona_fluxo": "06-pos-checkout" },
+        { "label": "Nova reserva", "aciona_fluxo": "01-reservas" }
+      ]
+    },
+    { "id": "fim", "tipo": "finalizar", "fechado_por": "Dono do chat" }
+  ],
+  "pendencias_verificar": [
+    "Textos das saudações por horário (bom dia/tarde/noite) - onde encaixam agora?",
+    "Nome exato da coluna do número da reserva e de phone_normalized em users",
+    "Confirmar se payment_status usa 'pago'/'paid' e os valores possíveis",
+    "Aceite de política de privacidade - integrar ao primeiro contato do lead"
+  ]
+}

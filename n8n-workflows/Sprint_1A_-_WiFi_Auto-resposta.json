@@ -1,0 +1,534 @@
+{
+  "name": "Sprint 1A - WiFi Auto-resposta",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chatwoot-whatsapp",
+        "options": {}
+      },
+      "id": "870a45f0-f71b-4f81-a221-4c9afa35b604",
+      "name": "Webhook Chatwoot",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [
+        -1600,
+        432
+      ],
+      "webhookId": "chatwoot-whatsapp"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "phone_raw",
+              "value": "=={{ $json.body.sender.phone_number }}",
+              "type": "string"
+            },
+            {
+              "id": "a2",
+              "name": "phone_normalized",
+              "value": "=={{ ($json.body.sender.phone_number || '').replace(/\\D/g, '').length === 12 && ($json.body.sender.phone_number || '').replace(/\\D/g, '').startsWith('55') ? ($json.body.sender.phone_number || '').replace(/\\D/g, '').substring(0,4) + '9' + ($json.body.sender.phone_number || '').replace(/\\D/g, '').substring(4) : ($json.body.sender.phone_number || '').replace(/\\D/g, '') }}",
+              "type": "string"
+            },
+            {
+              "id": "a3",
+              "name": "message_text",
+              "value": "=={{ ($json.body.content || '').toLowerCase() }}",
+              "type": "string"
+            },
+            {
+              "id": "e592676a-7660-4ac3-ab62-b505ff197ad2",
+              "name": "conversation_id",
+              "value": "=={{ $json.body.conversation.id }}",
+              "type": "number"
+            },
+            {
+              "id": "a5",
+              "name": "account_id",
+              "value": "=={{ $json.body.account.id }}",
+              "type": "number"
+            },
+            {
+              "id": "a6",
+              "name": "sender_name",
+              "value": "=={{ $json.body.sender.name || 'Hóspede' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "26b52e39-f0b3-4c82-acc1-2f1d09d14e89",
+      "name": "Extrai dados",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1168,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-wifi",
+              "leftValue": "={{ $json.message_text }}",
+              "rightValue": "wifi|wi-fi|wi fi|senha|internet|rede",
+              "operator": {
+                "type": "string",
+                "operation": "regex"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b63668d0-fb42-43d7-969d-4df50669275a",
+      "name": "Mensagem é sobre WiFi?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -944,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "v_guest_active_stay",
+        "limit": 1,
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "phone_normalized",
+              "condition": "eq",
+              "keyValue": "={{ $json.phone_normalized }}"
+            }
+          ]
+        }
+      },
+      "id": "7d747864-8a2a-439d-bcfd-42ade94d331a",
+      "name": "Busca hóspede ativo",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -720,
+        224
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "iJ2h9x2dhot63mhM",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-found",
+              "leftValue": "={{ $json.property_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ab9c366e-6763-4ffb-b4e6-e8c57e3c3cc0",
+      "name": "Hóspede identificado?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -512,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "sw-105",
+                    "leftValue": "={{ $json.property_id }}",
+                    "rightValue": "apt-105",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "ipe_105"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "sw-203",
+                    "leftValue": "={{ $json.property_id }}",
+                    "rightValue": "apt-203",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "ipe_203"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "sw-804",
+                    "leftValue": "={{ $json.property_id }}",
+                    "rightValue": "apt-804",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "forte_804"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "outro"
+        }
+      },
+      "id": "93573773-99a0-49f9-b5a6-5512c2bb9b2e",
+      "name": "Qual apartamento?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -288,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "m1",
+              "name": "wifi_response",
+              "value": "=Oi, {{ $('Extrai dados').item.json.sender_name.split(' ')[0] }}! 👋\n\n📶 *Rede WiFi:* __Hospedagem105_vivo__\n🔑 *Senha:* __BemVindo105__\n\nA rede pega bem em todo o apartamento. Se tiver qualquer dificuldade pra conectar, me chama! 😊",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5fbccffa-6088-43fb-8d56-8f200c358c50",
+      "name": "Resposta Ipê (105)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -64,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "m2",
+              "name": "wifi_response",
+              "value": "=Oi, {{ $('Extrai dados').item.json.sender_name.split(' ')[0] }}! 👋\n\n📶 *Rede WiFi:* __Hospedagem105_vivo__\n🔑 *Senha:* __BemVindo105__\n\nA rede pega bem em todo o apartamento. Se tiver qualquer dificuldade pra conectar, me chama! 😊",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "30d6cefb-c56b-44f7-91ae-7da92374fcae",
+      "name": "Resposta Ipê (203)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -64,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "m3",
+              "name": "wifi_response",
+              "value": "=Oi, {{ $('Extrai dados').item.json.sender_name.split(' ')[0] }}! 👋\n\n📶 *Rede WiFi:* __Rosemary__\n🔑 *Senha:* __megue6049__\n\nA rede pega bem em todo o apartamento. Se tiver qualquer dificuldade pra conectar, me chama! 😊",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "94a464bd-ddc3-4156-8535-2c1c1a4e5951",
+      "name": "Resposta Forte (804)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -64,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "=POST",
+        "url": "=https://chat.recifeflatstemporada.com/api/v1/accounts/{{ $('Extrai dados').item.json.account_id }}/conversations/{{ $('Extrai dados').item.json.conversation_id }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"content\": {{ JSON.stringify($json.wifi_response) }},\n  \"message_type\": \"outgoing\",\n  \"private\": false\n}",
+        "options": {}
+      },
+      "id": "511ab997-d2ec-4fa4-83fc-7c2a9fb3c7f6",
+      "name": "Responde no Chatwoot",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        160,
+        224
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "VjNdxyrnCVlYmydz",
+          "name": "Chatwoot API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-1",
+              "leftValue": "={{ $json[\"body\"][\"event\"] }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "1a41ee96-6579-4aab-b6a8-1267183201cb",
+      "name": "É mensagem de hóspede?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -1424,
+        352
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook Chatwoot": {
+      "main": [
+        [
+          {
+            "node": "É mensagem de hóspede?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extrai dados": {
+      "main": [
+        [
+          {
+            "node": "Mensagem é sobre WiFi?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mensagem é sobre WiFi?": {
+      "main": [
+        [
+          {
+            "node": "Busca hóspede ativo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busca hóspede ativo": {
+      "main": [
+        [
+          {
+            "node": "Hóspede identificado?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hóspede identificado?": {
+      "main": [
+        [
+          {
+            "node": "Qual apartamento?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qual apartamento?": {
+      "main": [
+        [
+          {
+            "node": "Resposta Ipê (105)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Resposta Ipê (203)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Resposta Forte (804)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resposta Ipê (105)": {
+      "main": [
+        [
+          {
+            "node": "Responde no Chatwoot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resposta Ipê (203)": {
+      "main": [
+        [
+          {
+            "node": "Responde no Chatwoot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resposta Forte (804)": {
+      "main": [
+        [
+          {
+            "node": "Responde no Chatwoot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "É mensagem de hóspede?": {
+      "main": [
+        [
+          {
+            "node": "Extrai dados",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "d3258b6e-1351-40be-ae98-be90a8f07529",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "b186e5a7fb855e4c4d3aca1fca66450666782f763be08421abd19d8464351fdc"
+  },
+  "nodeGroups": [],
+  "id": "0Fdfz7GlKgnGRJGc",
+  "tags": []
+}

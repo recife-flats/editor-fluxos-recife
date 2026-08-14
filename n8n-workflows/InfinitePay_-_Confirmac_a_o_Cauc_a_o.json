@@ -1,0 +1,296 @@
+{
+  "name": "InfinitePay - Confirmação Caução",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "infinitepay-caucao",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "ip-webhook-1",
+      "name": "Webhook InfinitePay",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [
+        -192,
+        32
+      ],
+      "webhookId": "infinitepay-caucao"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || {};\n\nreturn [{\n  json: {\n    handle: 'recifeflats',\n    order_nsu: body.order_nsu,\n    transaction_nsu: body.transaction_nsu,\n    slug: body.invoice_slug,\n    receipt_url: body.receipt_url || null\n  }\n}];"
+      },
+      "id": "ip-prepara-1",
+      "name": "Prepara Verificação",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        32,
+        32
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.checkout.infinitepay.io/payment_check",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"handle\": {{ JSON.stringify($json.handle) }},\n  \"order_nsu\": {{ JSON.stringify($json.order_nsu) }},\n  \"transaction_nsu\": {{ JSON.stringify($json.transaction_nsu) }},\n  \"slug\": {{ JSON.stringify($json.slug) }}\n}",
+        "options": {}
+      },
+      "id": "ip-httpcheck-1",
+      "name": "InfinitePay - Verificar Pagamento",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        256,
+        32
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.success }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "c2",
+              "leftValue": "={{ $json.paid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ip-if-1",
+      "name": "Pagamento confirmado?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        480,
+        32
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\"success\": true, \"message\": null} }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "ip-resp200-1",
+      "name": "Responde Webhook - Pago",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        704,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH updated_deposit AS (\n  UPDATE security_deposits\n  SET status = 'received',\n      paid_at = now(),\n      infinite_payment_id = $2,\n      receipt_proof_url = $3,\n      \"updatedAt\" = CURRENT_TIMESTAMP,\n      updated_at = now()\n  WHERE infinite_reference = $1 AND status = 'pending'\n  RETURNING booking_id, metadata\n)\nUPDATE bookings SET comprovante_ok = true\nWHERE id = (SELECT booking_id FROM updated_deposit)\nRETURNING (SELECT metadata FROM updated_deposit) AS metadata, (SELECT booking_id FROM updated_deposit) AS booking_id;",
+        "options": {
+          "queryReplacement": "={{ [ $('Prepara Verificação').item.json.order_nsu, $('Prepara Verificação').item.json.transaction_nsu, $('Prepara Verificação').item.json.receipt_url ] }}"
+        }
+      },
+      "id": "ip-pg-1",
+      "name": "Atualiza Deposit e Booking",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        704,
+        128
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "dsFHSj3fyDBYrWYF",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const pgResult = $input.first().json;\n\nlet metadata = {};\ntry {\n  metadata = typeof pgResult.metadata === 'string' ? JSON.parse(pgResult.metadata) : (pgResult.metadata || {});\n} catch (e) {\n  metadata = {};\n}\n\nreturn [{\n  json: {\n    conversation_id: metadata.conversation_id,\n    account_id: metadata.account_id\n  }\n}];"
+      },
+      "id": "ip-montamsg-1",
+      "name": "Monta Mensagem Confirmação",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        928,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://chat.recifeflatstemporada.com/api/v1/accounts/{{ $json.account_id }}/conversations/{{ $json.conversation_id }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"content\": \"🎉 Recebemos o pagamento da sua caução! Está tudo certo, muito obrigada 💜\",\n  \"message_type\": \"outgoing\",\n  \"private\": false\n}",
+        "options": {}
+      },
+      "id": "ip-chatwoot-1",
+      "name": "Confirma no Chatwoot",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1152,
+        128
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "VjNdxyrnCVlYmydz",
+          "name": "Chatwoot API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\"success\": false, \"message\": \"Pagamento não confirmado\"} }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "ip-resp400-1",
+      "name": "Responde Webhook - Nao Confirmado",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        704,
+        224
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook InfinitePay": {
+      "main": [
+        [
+          {
+            "node": "Prepara Verificação",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepara Verificação": {
+      "main": [
+        [
+          {
+            "node": "InfinitePay - Verificar Pagamento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "InfinitePay - Verificar Pagamento": {
+      "main": [
+        [
+          {
+            "node": "Pagamento confirmado?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pagamento confirmado?": {
+      "main": [
+        [
+          {
+            "node": "Responde Webhook - Pago",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responde Webhook - Nao Confirmado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Atualiza Deposit e Booking": {
+      "main": [
+        [
+          {
+            "node": "Monta Mensagem Confirmação",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monta Mensagem Confirmação": {
+      "main": [
+        [
+          {
+            "node": "Confirma no Chatwoot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responde Webhook - Pago": {
+      "main": [
+        [
+          {
+            "node": "Atualiza Deposit e Booking",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "saveExecutionProgress": true
+  },
+  "versionId": "4877b03c-7a26-4914-a081-b6e9d8b26be5",
+  "meta": {
+    "instanceId": "b186e5a7fb855e4c4d3aca1fca66450666782f763be08421abd19d8464351fdc"
+  },
+  "nodeGroups": [],
+  "id": "8JkKROjujaAMMkzx",
+  "tags": []
+}
